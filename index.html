@@ -15,6 +15,8 @@
   #topleft .label { font-size: 14px; letter-spacing: 3px; margin-bottom: 4px; }
   #topleft .bar { height: 18px; }
   #stats { margin-top: 8px; font-size: 18px; }
+  #objective { margin-top: 8px; font-size: 16px; color: #ffe28a; text-shadow: 0 2px 3px #000; }
+  #objective:empty { display: none; }
   #hint { margin-top: 6px; font-size: 14px; opacity: .75; }
   #loadout { position: absolute; bottom: 92px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; text-shadow: 0 1px 3px #000; }
   .slot { min-width: 74px; padding: 4px 8px; font-size: 13px; text-align: center; border: 2px solid rgba(201,164,92,.5); border-radius: 8px; background: rgba(20,12,4,.55); }
@@ -122,6 +124,7 @@
     <div class="label">HULL INTEGRITY <span id="repairing"></span></div>
     <div class="bar"><div id="hpFill"></div></div>
     <div id="stats"><span id="gold">Gold: 0</span> &nbsp;·&nbsp; <span id="wave">Wave 1</span> &nbsp;·&nbsp; <span id="foes"></span></div>
+    <div id="objective"></div>
     <div id="hint">[B] Shipwright — spend gold on upgrades</div>
   </div>
   <div id="bossbar"><div id="bossName"></div><div class="bar"><div id="bossFill"></div></div></div>
@@ -515,24 +518,29 @@ function buildShip(c, isPlayer, masts = 2) {
 }
 
 const PLAYER_CSS = ['#ffd34d', '#5ab0ff', '#6fe07a', '#d98aff'];
-const ENEMY_COLORS = [   // 0-3 regular, 4 veteran, 5 flagship
+const ENEMY_COLORS = [   // 0-3 regular, 4 veteran, 5 flagship, 6 treasure galleon, 7 merchant
   { hull: 0x3a2a1e, trim: 0x8b1a1a, sail: 0xa33a2c, flag: 0xaa0000 },
   { hull: 0x2b2b33, trim: 0x2a4f9a, sail: 0xdcd3bd, flag: 0x1f3f8a },
   { hull: 0x4a3020, trim: 0x2f6a2f, sail: 0x3a3a3a, flag: 0x111111 },
   { hull: 0x5a1f1f, trim: 0xcfcfcf, sail: 0xe7c98a, flag: 0x6a1b9a },
   { hull: 0x2a1a12, trim: 0xe0b030, sail: 0x8a1c1c, flag: 0xe0b030 },
   { hull: 0x1d2440, trim: 0xf0c040, sail: 0xf4e3b0, flag: 0xf0c040 },
+  { hull: 0x7a4a1a, trim: 0xffd700, sail: 0xfff4d6, flag: 0xffd700 },
+  { hull: 0x6b4a2a, trim: 0xf0f0f0, sail: 0xfafafa, flag: 0x2a7a2a },
 ];
 // enemy roles: each type plays a part in the fleet's tactics
 const ENEMY_TYPES = {
   cutter:   { role: 'line', label: '', scale: 1, masts: 2, guns: 4, hp: 1, speed: 0, turn: 0.55, reload: 1, bounty: 1, cost: 1, from: 1, weight: 3, range: [50, 70] },
   raider:   { role: 'raider', label: 'Raider', windEff: 0.4, scale: 0.8, masts: 1, guns: 3, hp: 0.45, dmg: 0.65, speed: 4, turn: 0.95, reload: 0.7, bounty: 0.75, cost: 1, from: 2, weight: 2, range: [30, 42] },
-  ketch:    { role: 'ketch', label: 'Bomb Ketch', scale: 0.9, masts: 2, guns: 2, hp: 0.8, speed: -1, turn: 0.55, reload: 1.2, bounty: 1.2, cost: 1.5, from: 3, weight: 1.2, range: [110, 140] },
+  ketch:    { role: 'ketch', label: 'Bomb Ketch', scale: 0.9, masts: 2, guns: 2, hp: 0.6, speed: -1, turn: 0.55, reload: 1.2, bounty: 1.2, cost: 1.5, from: 3, weight: 1.2, range: [110, 140] },
   fireship: { role: 'fireship', label: '🔥 Fireship', scale: 0.85, masts: 1, guns: 0, hp: 0.5, speed: 5, turn: 0.85, reload: 1, bounty: 0.8, cost: 1, from: 4, weight: 1, range: [0, 0] },
   heavy:    { role: 'heavy', label: 'Heavy', scale: 1.3, masts: 3, guns: 6, hp: 1.9, speed: -3, turn: 0.38, reload: 1.25, bounty: 1.7, cost: 2.5, from: 6, weight: 1.2, range: [40, 55] },
   flagship: { role: 'flag', label: '⚑ Flagship', scale: 1.15, masts: 3, guns: 5, hp: 2.4, speed: -1.5, turn: 0.45, reload: 1, bounty: 3, cost: 3.5, from: 8, weight: 2, range: [70, 90], unique: true },
 };
 const MAX_FLEET = 11;
+const KING_COLORS = { hull: 0x120c0c, trim: 0xffd700, sail: 0x1a1a1a, flag: 0xffd700 };
+// difficulty multipliers (chosen on the main menu)
+let DIFF = { key: 'normal', name: 'Normal', hp: 1, dmg: 1, slots: 0, renown: 1 };
 const BOSS_COLORS = { hull: 0x1c1a1a, trim: 0xb8860b, sail: 0x3a0c0c, flag: 0x8b0000 };
 
 // ============================================================
@@ -823,7 +831,11 @@ class Ship {
     if (!dot) this.lastHitT = time;   // burning slows repairs but doesn't reset the repair timer
     if (attacker) this.lastHitBy = attacker;
     if (this === me && !quiet) hurtFx();
-    if (this.hp <= 0) { this.hp = 0; this.startSinking(); }
+    if (this.hp <= 0) {
+      this.hp = 0;
+      if (this.role === 'fireship') { fireshipExplode(this, attacker && teamOf(attacker) === 'P' ? attacker : null); return; }
+      this.startSinking();
+    }
   }
 
   beginSinkFx() {
@@ -847,6 +859,164 @@ class Ship {
 // ============================================================
 //  Islands and forts
 // ============================================================
+// The Kraken: a head that surfaces to be shot, and tentacles that burst up around its prey,
+// sway, and slam down on ships. Damage to tentacles bleeds into the Kraken's own health.
+class Kraken {
+  constructor(x, z, hp) {
+    Object.assign(this, { kind: 'k', id: 'kraken', isPlayer: false, name: '🐙 The Kraken', x, z, maxHp: hp, hp, dead: false, dying: false, sinking: false });
+    this.tentacles = []; this.headUp = 0; this.headT = 9; this.spawnT = 1.5; this.surfaced = false; this.tSeq = 0; this.dieT = 0;
+    this.skin = new THREE.MeshStandardMaterial({ color: 0x7a2c62, roughness: 0.55, flatShading: true });
+    this.belly = new THREE.MeshStandardMaterial({ color: 0xd08aa8, roughness: 0.6, flatShading: true });
+    this.head = new THREE.Group();
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(7, 14, 10), this.skin); dome.scale.set(1, 1.35, 1.15); dome.position.y = 4;
+    const eyeM = new THREE.MeshStandardMaterial({ color: 0xffd040, emissive: 0xffa000, emissiveIntensity: 1.2 }), pupilM = new THREE.MeshBasicMaterial({ color: 0x000000 });
+    for (const sx of [-3, 3]) {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(1.4, 10, 8), eyeM); eye.position.set(sx, 3.5, 6.6);
+      const pu = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.8, 0.3), pupilM); pu.position.set(sx, 3.5, 7.9);
+      this.head.add(eye, pu);
+    }
+    this.head.add(dome);
+    this.head.traverse(o => { if (o.isMesh) o.castShadow = true; });
+    this.head.position.set(x, -14, z);
+    scene.add(this.head);
+  }
+  makeTentacle(id, x, z) {
+    const root = new THREE.Group(); root.position.set(x, -18, z);
+    let parent = root;
+    const segs = [];
+    for (let i = 0; i < 8; i++) {
+      const r0 = 1.5 - i * 0.16, len = 2.3;
+      const seg = new THREE.Group(); seg.position.y = i ? len : 0;
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(Math.max(0.15, r0 - 0.16), Math.max(0.2, r0), len, 8), this.skin);
+      m.position.y = len / 2; m.castShadow = true; seg.add(m);
+      if (i < 7) { const su = new THREE.Mesh(new THREE.SphereGeometry(r0 * 0.45, 6, 4), this.belly); su.position.set(0, len * 0.5, r0 * 0.8); seg.add(su); }
+      parent.add(seg); segs.push(seg); parent = seg;
+    }
+    scene.add(root);
+    return { id, x, z, root, segs, state: 'warn', t: 0, hp: 1, maxHp: 1, yaw: rand(0, Math.PI * 2), slamYaw: 0, slamT: 2, phase: rand(0, 6), struck: false };
+  }
+  dropTentacle(k) {
+    scene.remove(k.root);
+    k.root.traverse(o => { if (o.isMesh) o.geometry.dispose(); });
+  }
+  dispose() {
+    for (const k of this.tentacles) this.dropTentacle(k);
+    this.tentacles = [];
+    scene.remove(this.head);
+    this.dead = true;
+  }
+  update(dt, t, host) {
+    if (this.dead) return;
+    if (this.dying) {
+      this.dieT += dt;
+      this.head.position.y -= dt * 4; this.head.rotation.z += dt * 0.3;
+      for (const k of this.tentacles) { if (k.state !== 'gone') { k.state = 'sink'; } this.animTentacle(k, dt, t); }
+      if (Math.random() < dt * 8) fx.explosion(new THREE.Vector3(this.x + rand(-8, 8), 2, this.z + rand(-8, 8)), 1.2);
+      if (this.dieT > 4.5) this.dispose();
+      return;
+    }
+    const tgt = nearestPlayerShip(this.x, this.z);
+    if (host && tgt) {
+      if (!this.surfaced) { this.x += (tgt.pos.x - this.x) * dt * 0.12; this.z += (tgt.pos.z - this.z) * dt * 0.12; }
+      this.headT -= dt;
+      if (this.headT <= 0) {
+        this.surfaced = !this.surfaced;
+        this.headT = this.surfaced ? 7 : 12;
+        if (this.surfaced) {
+          const a = rand(0, Math.PI * 2);
+          this.x = tgt.pos.x + Math.sin(a) * 34; this.z = tgt.pos.z + Math.cos(a) * 34;
+          fx.splash(new THREE.Vector3(this.x, 0, this.z)); sfx('boss', tgt.pos);
+          notify('🐙 The Kraken surfaces — shoot its head!');
+        }
+      }
+      this.spawnT -= dt;
+      const live = this.tentacles.filter(k => k.state !== 'sink' && k.state !== 'gone').length;
+      if (this.spawnT <= 0 && live < 4 + Math.min(3, Math.floor(profiles.size / 2))) {
+        this.spawnT = rand(2.5, 4);
+        const f = tgt.forward(), a = rand(0, Math.PI * 2), d = rand(8, 22);
+        const x = tgt.pos.x + f.x * tgt.speed * 1.8 + Math.sin(a) * d, z = tgt.pos.z + f.z * tgt.speed * 1.8 + Math.cos(a) * d;
+        const k = this.makeTentacle(++this.tSeq, x, z);
+        k.hp = k.maxHp = Math.round((70 + 5 * wave) * DIFF.hp);
+        this.tentacles.push(k);
+        warnAt(x, z, 1.6, 0xb040ff);
+      }
+    }
+    this.headUp += ((this.surfaced ? 1 : 0) - this.headUp) * Math.min(1, dt * 1.5);
+    this.head.position.set(this.x, -14 + this.headUp * 13 + Math.sin(t) * 0.4 * this.headUp, this.z);
+    if (tgt) this.head.rotation.y = Math.atan2(tgt.pos.x - this.x, tgt.pos.z - this.z);
+    for (const k of this.tentacles) {
+      if (host) this.thinkTentacle(k, dt);
+      else k.t += dt;
+      this.animTentacle(k, dt, t);
+    }
+    for (let i = this.tentacles.length - 1; i >= 0; i--) if (this.tentacles[i].state === 'gone') { this.dropTentacle(this.tentacles[i]); this.tentacles.splice(i, 1); }
+  }
+  thinkTentacle(k, dt) {
+    k.t += dt;
+    if (k.state === 'warn' && k.t > 1.6) {
+      k.state = 'rise'; k.t = 0;
+      fx.splash(new THREE.Vector3(k.x, 0, k.z)); sfx('splash', new THREE.Vector3(k.x, 0, k.z));
+    } else if (k.state === 'rise' && k.t > 0.7) {
+      k.state = 'idle'; k.t = 0;
+      for (const s of ships) if (canHit(this, s) && Math.hypot(s.pos.x - k.x, s.pos.z - k.z) < 6 * s.scale) { s.damage(18 + wave, this); s.slowT = 3; }
+    } else if (k.state === 'idle') {
+      k.slamT -= dt;
+      let v = null, vd = 13;
+      for (const s of ships) { if (!canHit(this, s)) continue; const d = Math.hypot(s.pos.x - k.x, s.pos.z - k.z); if (d < vd) { vd = d; v = s; } }
+      if (v && k.slamT <= 0) { k.state = 'slam'; k.t = 0; k.struck = false; k.slamYaw = Math.atan2(v.pos.x - k.x, v.pos.z - k.z); }
+      else if (k.t > 8) { k.state = 'sink'; k.t = 0; }
+    } else if (k.state === 'slam') {
+      if (k.t > 0.75 && !k.struck) {
+        k.struck = true;
+        const ix = k.x + Math.sin(k.slamYaw) * 9, iz = k.z + Math.cos(k.slamYaw) * 9;
+        for (const s of ships) if (canHit(this, s) && Math.hypot(s.pos.x - ix, s.pos.z - iz) < 7 * s.scale) { s.damage((22 + 1.2 * wave) * DIFF.dmg, this); s.slowT = 2.5; }
+        fxHit(new THREE.Vector3(ix, 1, iz), 1.5); fx.splash(new THREE.Vector3(ix, 0, iz));
+      } else if (k.t > 1.4) { k.state = 'idle'; k.t = 0; k.slamT = rand(2, 3.5); }
+    } else if (k.state === 'sink' && k.t > 1.1) k.state = 'gone';
+  }
+  animTentacle(k, dt, t) {
+    const S = k.state;
+    let y = -18;
+    if (S === 'warn') {
+      if (Math.random() < dt * 18) P({ pos: new THREE.Vector3(k.x + rand(-3, 3), 0.2, k.z + rand(-3, 3)), vel: new THREE.Vector3(0, rand(2, 4), 0), color: 0xe8f6ff, size: 0.3, life: 0.6, basic: true });
+    } else if (S === 'rise') y = -18 + Math.min(1, k.t / 0.7) * 17.5;
+    else if (S === 'idle' || S === 'slam') y = -0.5 + waveHeight(k.x, k.z, t) * 0.5;
+    else if (S === 'sink') y = -0.5 - Math.min(1, k.t / 1) * 18;
+    k.root.position.set(k.x, y, k.z);
+    const slam = S === 'slam' ? Math.min(1, k.t / 0.75) : 0;
+    k.root.rotation.y = S === 'slam' ? k.slamYaw : k.yaw + Math.sin(t * 0.5 + k.phase) * 0.4;
+    k.segs.forEach((seg, i) => {
+      seg.rotation.x = slam > 0 ? slam * 0.32 : Math.sin(t * 2.2 + k.phase + i * 0.7) * 0.18 + 0.05;
+      seg.rotation.z = slam > 0 ? 0 : Math.cos(t * 1.7 + k.phase + i * 0.5) * 0.18;
+    });
+  }
+  hitTest(p) {
+    if (this.dead || this.dying) return null;
+    if (this.headUp > 0.6 && Math.hypot(p.x - this.x, p.y - (this.head.position.y + 4), p.z - this.z) < 8.5) return { head: true };
+    for (const k of this.tentacles) {
+      if ((k.state === 'idle' || k.state === 'slam' || k.state === 'rise') && p.y > -1 && p.y < 16 && Math.hypot(p.x - k.x, p.z - k.z) < 2.6) return { k };
+    }
+    return null;
+  }
+  damage(part, amount, attacker) {
+    if (this.dying || net.mode === 'guest') return;
+    if (part.k) {
+      part.k.hp -= amount; this.hp -= amount * 0.6;
+      if (part.k.hp <= 0 && part.k.state !== 'sink') { part.k.state = 'sink'; part.k.t = 0; }
+    } else this.hp -= amount * 1.5;
+    if (attacker) this.lastHitBy = attacker;
+    if (this.hp <= 0) this.die();
+  }
+  die() {
+    this.hp = 0; this.dying = true;
+    announce('🐙 The Kraken is slain!', 3.5);
+    fxHit(new THREE.Vector3(this.x, 3, this.z), 4);
+    const killer = this.lastHitBy && this.lastHitBy.profile;
+    for (const p of profiles.values()) { const r = p === killer ? 3000 : 1500; giveGold(p, r); notify(`🐙 Kraken bounty: +${r} gold`, p); }
+    spawnCrates(new THREE.Vector3(this.x, 0, this.z), 5, 10);
+  }
+}
+
 class Fort {
   constructor(isl, idx, R) {
     this.id = 'f' + idx; this.kind = 'f'; this.isPlayer = false;
@@ -896,7 +1066,7 @@ class Fort {
     }
     this.destroyed = v;
   }
-  reset() { this.hp = this.maxHp; this.destroyed = false; this.top.position.y = 0; this.reload = rand(1, 3); removeTag(this); }
+  reset() { this.siege = false; this.maxHp = 220; this.hp = this.maxHp; this.destroyed = false; this.top.position.y = 0; this.reload = rand(1, 3); removeTag(this); }
   damage(amount, attacker) {
     if (this.destroyed || net.mode === 'guest') return;
     this.hp -= amount;
@@ -927,12 +1097,12 @@ class Fort {
       if (this.rebuildT <= 0) { this.destroyed = false; this.hp = this.maxHp; }
       return;
     }
-    const tgt = nearestPlayerShip(this.x, this.z, 140);
+    const tgt = nearestPlayerShip(this.x, this.z, this.siege ? 170 : 140);
     if (!tgt) return;
     this.aim = Math.atan2(tgt.pos.x - this.x, tgt.pos.z - this.z);
     this.reload -= dt;
     if (this.reload <= 0 && Math.abs(angDiff(this.aim, this.turret.rotation.y)) < 0.15) {
-      this.reload = 3.2;
+      this.reload = this.siege ? 2.2 : 3.2;
       this.shoot(tgt, 0);
       after(0.3, () => { if (!this.destroyed && isAlive(tgt)) this.shoot(tgt, 1); });
     }
@@ -1150,10 +1320,23 @@ function drawChart(ctx, W, cx, cz, S, h, rim) {
   const offscreen = [];
   for (const s of ships) {
     if (s === me || s.dead) continue;
-    const col = s.sinking ? '#555' : s.kind === 'a' ? '#6fe07a' : s.kind === 'p' ? (gameMode === 'pvp' ? '#ff4a3a' : PLAYER_CSS[s.colorIdx % 4])
+    const col = s.sinking ? '#555' : s.role === 'convoy' ? '#ffffff' : s.role === 'merchant' ? '#ffd700' : s.kind === 'a' ? '#6fe07a' : s.kind === 'p' ? (gameMode === 'pvp' ? '#ff4a3a' : PLAYER_CSS[s.colorIdx % 4])
       : s.role === 'flag' ? '#ffc040' : s.role === 'fireship' ? '#ff9a20' : s.kind === 'b' ? '#ff2020' : '#ff4a3a';
     const [x, y] = arrow(s, col, s.kind === 'b' ? 9 : 5.5 * Math.max(0.85, s.scale));
     if (rim && Math.hypot(x - R, y - R) > R - 6 && teamOf(s) === 'E' && !s.sinking) offscreen.push([x, y, col]);
+  }
+  // objective and Kraken markers
+  const om = objective.marker;
+  if (om) {
+    const [x, y] = toScreen(om[0], om[1]), pulse = 1 + 0.15 * Math.sin(time * 4);
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = om[2] === 'harbor' ? '#40ff80' : om[2] === 'fort' ? '#ff4040' : om[2] === 'kraken' ? '#c060ff' : '#ffd700';
+    ctx.beginPath(); ctx.arc(x, y, 9 * pulse, 0, Math.PI * 2); ctx.stroke();
+    if (om[2] === 'harbor') { ctx.fillStyle = '#40ff80'; ctx.font = 'bold 12px Georgia'; ctx.textAlign = 'center'; ctx.fillText('⚓', x, y + 4); }
+  }
+  if (kraken && !kraken.dead) {
+    ctx.fillStyle = '#c060ff';
+    for (const k of kraken.tentacles) { const [x, y] = toScreen(k.x, k.z); ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill(); }
   }
   if (me) arrow(me, '#ffffff', 7.5);
   if (rim) {
@@ -1264,6 +1447,25 @@ function updateStreaks(dt, t, focus) {
   streakMesh.instanceMatrix.needsUpdate = true;
 }
 
+// objective beacon: a glowing ring + pole at the convoy's harbour or around the besieged fort
+const beacon = new THREE.Group();
+const beaconMat = new THREE.MeshBasicMaterial({ color: 0x40ff80, transparent: true, opacity: 0.75, depthWrite: false, fog: false });
+const beaconRing = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 48).rotateX(-Math.PI / 2), beaconMat);
+const beaconPole = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 40, 6), beaconMat);
+beaconPole.position.y = 20;
+beacon.add(beaconRing, beaconPole);
+beacon.visible = false;
+scene.add(beacon);
+function updateBeacon(t) {
+  const m = objective.marker;
+  if (!m || (m[2] !== 'harbor' && m[2] !== 'fort')) { beacon.visible = false; return; }
+  beacon.visible = true;
+  beacon.position.set(m[0], m[2] === 'fort' ? 0.6 : waveHeight(m[0], m[1], t) + 0.3, m[1]);
+  beaconMat.color.set(m[2] === 'fort' ? 0xff4040 : 0x40ff80);
+  beaconRing.scale.setScalar((m[2] === 'fort' ? 22 : 30) * (1 + 0.06 * Math.sin(t * 3)));
+  beaconPole.visible = m[2] === 'harbor';
+}
+
 // ============================================================
 //  Cannonballs (and boss mortar shells)
 // ============================================================
@@ -1361,6 +1563,14 @@ function updateBalls(dt, t, host) {
         }
       }
     }
+    if (!done && host && kraken && !b.aoe && b.owner && teamOf(b.owner) === 'P') {
+      const part = kraken.hitTest(p);
+      if (part) {
+        kraken.damage(part, b.dmg, b.owner); fxHit(p, 1);
+        if (b.owner.kind === 'p' && b.owner.profile) notify(part.head ? '🎯 Hit the Kraken’s head!' : 'Tentacle hit!', b.owner.profile);
+        done = true;
+      }
+    }
     if (!done) {
       for (const isl of islands) {
         if (b.owner && b.owner.isl === isl) continue;
@@ -1374,6 +1584,7 @@ function updateBalls(dt, t, host) {
         if (host) for (const s of ships) {
           if (canHit(b.owner, s) && Math.hypot(s.pos.x - p.x, s.pos.z - p.z) < b.aoe + 3 * s.scale) s.damage(b.dmg, b.owner);
         }
+        if (host && kraken && b.owner && teamOf(b.owner) === 'P') for (const k of kraken.tentacles) if (Math.hypot(k.x - p.x, k.z - p.z) < b.aoe + 2) kraken.damage({ k }, b.dmg, b.owner);
       } else { fx.splash(p.clone()); sfx('splash', p); }
       done = true;
     }
@@ -1480,6 +1691,7 @@ function collisions() {
     if (d < R && d > 0.001) {
       const push = (R - d) / 2, nx = dx / d, nz = dz / d;
       a.pos.x -= nx * push; a.pos.z -= nz * push; b.pos.x += nx * push; b.pos.z += nz * push;
+      if (a.role === 'fireship' || b.role === 'fireship') { fireshipExplode(a.role === 'fireship' ? a : b, null); continue; }
       const impact = (a.speed + b.speed) * 0.5;
       const friendly = teamOf(a) === teamOf(b) && !(gameMode === 'pvp' && a.kind === 'p' && b.kind === 'p');
       if (!friendly && impact > 4 && a.bumpCd <= 0 && b.bumpCd <= 0) {
@@ -1493,6 +1705,7 @@ function collisions() {
   for (const s of live) for (const isl of islands) {
     const dx = s.pos.x - isl.x, dz = s.pos.z - isl.z, d = Math.hypot(dx, dz), R = isl.r + 3 * s.scale;
     if (d < R) {
+      if (s.role === 'fireship') { fireshipExplode(s, null); break; }
       s.pos.x = isl.x + dx / d * R; s.pos.z = isl.z + dz / d * R;
       if (s.speed > 5 && s.bumpCd <= 0) { s.damage(s.speed * 0.8, null); s.bumpCd = 1.5; sfx('thud', s.pos); fx.dust(s.local(0, 1, 7)); }
       s.speed *= 0.9;
@@ -1531,15 +1744,15 @@ function updateFleet(dt) {
     for (const s of ships) {
       if (teamOf(s) !== 'P' || !isAlive(s) || s === menuShip || s.smokeT > 0) continue;
       // focus the weakest nearby captain; escorts are a lower priority
-      const score = (s.hp / s.maxHp) * 120 + Math.hypot(s.pos.x - c.x, s.pos.z - c.z) * 0.5 + (s.kind === 'a' ? 60 : 0);
+      const score = (s.hp / s.maxHp) * 120 + Math.hypot(s.pos.x - c.x, s.pos.z - c.z) * 0.5 + (s.role === 'convoy' ? -90 : s.kind === 'a' ? 60 : 0);
       if (score < bs) { bs = score; best = s; }
     }
     fleet.target = best;
   }
   // fairness: only a handful of ships press the attack on the focus target; the rest wait on an outer ring
-  const slots = Math.min(6, 3 + Math.floor(wave / 4)) + 2 * Math.max(0, profiles.size - 1);
+  const slots = Math.max(2, Math.min(6, 3 + Math.floor(wave / 4)) + 2 * Math.max(0, profiles.size - 1) + DIFF.slots);
   const t = fleet.target;
-  const brawlers = foes.filter(e => e.role !== 'fireship' && e.role !== 'ketch' && e.kind !== 'b');
+  const brawlers = foes.filter(e => e.role !== 'fireship' && e.role !== 'ketch' && e.role !== 'merchant' && e.kind !== 'b');
   if (t) brawlers.sort((a, b) => Math.hypot(a.pos.x - t.pos.x, a.pos.z - t.pos.z) - Math.hypot(b.pos.x - t.pos.x, b.pos.z - t.pos.z));
   brawlers.forEach((e, i) => { e.engaged = i < slots; });
   fleet.flag = foes.find(s => s.role === 'flag') || null;
@@ -1583,17 +1796,42 @@ function enemyMortar(e, tgt, n, spread, dmg, T = 2.6) {
   }
 }
 
-function fireshipExplode(e) {
-  const p = e.pos.clone().setY(1.5);
-  fxHit(p, 3);
+// A fireship goes up when it rams anything or is shot. The blast hurts EVERY ship nearby
+// (enemies included) and sets them burning; if a player shot it, they get the credit.
+function fireshipExplode(e, by = null) {
+  if (e.exploded) return;
+  e.exploded = true;
+  const p = e.pos.clone().setY(1.5), R = 22, blast = e.dmg * 3.5;
+  fxHit(p, 4);
+  for (let i = 0; i < 4; i++) after(0.08 * (i + 1), () => fx.explosion(p.clone().add(rv(6).setY(rand(0, 4))), 2.2));
+  shockwave(p, R);
+  sfx('boom', p);
+  if (me && me.pos.distanceTo(p) < 70) shake = Math.min(2, shake + 1.2 * (1 - me.pos.distanceTo(p) / 70));
   for (const s of ships) {
-    if (!canHit(e, s) || Math.hypot(s.pos.x - p.x, s.pos.z - p.z) > 13 * s.scale) continue;
-    s.damage(e.dmg * 3.5, e);
-    applyBurn(s, 3, e.dmg * 0.3, e);
+    if (s === e || !isAlive(s)) continue;
+    const d = Math.hypot(s.pos.x - p.x, s.pos.z - p.z);
+    if (d > R + 4 * s.scale) continue;
+    const fall = clamp(1 - d / (R + 4 * s.scale), 0, 1);
+    s.damage(blast * (0.4 + 0.6 * fall), by || e);
+    applyBurn(s, 2, e.dmg * 0.3, by || e);
   }
-  e.selfDestruct = true;
+  e.selfDestruct = !by;   // shot down by a player: they earn the bounty
+  if (by) e.lastHitBy = by;
   e.hp = 0;
   e.startSinking();
+}
+const SHOCK_GEO = new THREE.RingGeometry(0.85, 1, 48).rotateX(-Math.PI / 2);
+function shockwave(p, R) {
+  const m = new THREE.Mesh(SHOCK_GEO, new THREE.MeshBasicMaterial({ color: 0xfff0c0, transparent: true, opacity: 0.9, depthWrite: false, fog: false }));
+  m.position.set(p.x, 0.6, p.z);
+  scene.add(m);
+  let t = 0;
+  const tick = () => {
+    t += 1 / 60;
+    m.scale.setScalar(1 + t * R * 3); m.material.opacity = Math.max(0, 0.9 - t * 2.2);
+    if (t < 0.45) requestAnimationFrame(tick); else { scene.remove(m); m.material.dispose(); }
+  };
+  tick();
 }
 
 // steer away from land, and (for deep hulls) shallows and reefs
@@ -1614,6 +1852,16 @@ function avoidObstacles(e, desired) {
 function updateAI(e, dt) {
   if (!isAlive(e)) return;
   if (e.grappled) { e.steer = 0; e.sail = 0; return; }   // locked in a boarding action
+  if (e.role === 'merchant' || e.role === 'convoy') {
+    let desired = Math.atan2(e.goal.x - e.pos.x, e.goal.z - e.pos.z);
+    if (e.role === 'merchant') {   // the treasure galleon veers away from pirates closing in
+      const th = nearestPlayerShip(e.pos.x, e.pos.z, 70);
+      if (th) desired += angDiff(Math.atan2(e.pos.x - th.pos.x, e.pos.z - th.pos.z), desired) * 0.35;
+    }
+    e.sail = e.role === 'convoy' ? 2 / 3 : 1;
+    e.steer = clamp(angDiff(avoidObstacles(e, desired), e.heading) * 2, -1, 1);
+    return;
+  }
   const sc = e.scale, ally = e.kind === 'a', role = e.role || 'line';
   let tgt;
   if (ally) tgt = nearestOfTeam('E', e.pos.x, e.pos.z, 220);
@@ -1642,7 +1890,7 @@ function updateAI(e, dt) {
       const f = tgt.forward(), T = Math.min(3, dist / Math.max(4, e.speed));
       desired = Math.atan2(tgt.pos.x + f.x * tgt.speed * T - e.pos.x, tgt.pos.z + f.z * tgt.speed * T - e.pos.z);
       e.sail = 1;
-      if (dist < 6 * (sc + tgt.scale)) { fireshipExplode(e); return; }
+      if (dist < 6 * (sc + tgt.scale)) { fireshipExplode(e, null); return; }
     } else {
       // take up a station around the target according to role
       let slot;
@@ -1704,7 +1952,7 @@ function updateAI(e, dt) {
     e.mortarT -= dt * e.reloadMul;
     if (e.mortarT <= 0 && dist < 175) {
       if (e.kind === 'b') { e.mortarT = rand(6, 8); enemyMortar(e, tgt, 5, 13, e.dmg + 4); }
-      else { e.mortarT = rand(6.5, 8.5); enemyMortar(e, tgt, 3, 9, e.dmg + 2); }
+      else { e.mortarT = rand(8, 10); enemyMortar(e, tgt, 2, 7, e.dmg, 3.2); }
     }
   }
 }
@@ -1754,6 +2002,7 @@ function sfx(name, pos) {
     case 'hit': noiseBurst(0.9 * att, 0.7, 'lowpass', 3000, 200); tone(0.6 * att, 0.3, 140, 40, 'triangle'); break;
     case 'splash': noiseBurst(0.35 * att, 0.6, 'bandpass', 1800, 500, 0.8); break;
     case 'thud': noiseBurst(0.5 * att, 0.4, 'lowpass', 800, 100); break;
+    case 'boom': noiseBurst(1.2 * att, 2.2, 'lowpass', 1600, 60); tone(1.1 * att, 1.2, 70, 22); break;
     case 'clang': tone(0.18 * att, 0.12, rand(1100, 1600), 700, 'square'); noiseBurst(0.25 * att, 0.15, 'highpass', 3000, 2000); break;
     case 'pickup': tone(0.25, 0.15, 660, 880, 'triangle'); setTimeout(() => tone(0.25, 0.25, 880, 1320, 'triangle'), 110); break;
     case 'coin': tone(0.2, 0.1, 990, 1320, 'square'); setTimeout(() => tone(0.18, 0.2, 1320, 1760, 'square'), 80); break;
@@ -1820,6 +2069,8 @@ function clearEntities() {
   for (const k of kegs) scene.remove(k.m); kegs.length = 0;
   for (const p of particles) { scene.remove(p.m); p.m.material.dispose(); } particles.length = 0;
   for (const f of forts) f.reset();
+  if (kraken) { kraken.dispose(); kraken = null; }
+  waveEvent = null; objective = { text: '', marker: null }; victoryShown = false;
   for (const p of profiles.values()) p.ship = null;
   timers.length = 0;
   fleet.target = null; fleet.brokenT = 0;
@@ -1896,6 +2147,40 @@ function clearSpot(x, z, deep) {
   return [x, z];
 }
 
+function spawnEnemy(type, n, x, z, heading, veteran = false) {
+  const ci = type.role === 'flag' ? 5 : veteran ? 4 : Math.floor(Math.random() * 4);
+  const e = new Ship({
+    kind: 'e', colors: ENEMY_COLORS[ci], colorIdx: ci, scale: type.scale, masts: type.masts, cannons: type.guns,
+    x, z, heading,
+    maxHp: Math.round((45 + n * 12) * type.hp * (veteran ? 1.35 : 1) * DIFF.hp),
+    maxSpeed: Math.min(13.5, 9.5 + n * 0.5) + type.speed,
+    turnRate: type.turn,
+    reloadTime: Math.max(1.9, 3.6 - n * 0.2) * type.reload,
+    aimErr: Math.max(0.025, 0.11 - n * 0.012) * (veteran ? 0.5 : 1),
+    dmg: (9 + 0.6 * n) * (type.dmg || 1) * (veteran ? 1.2 : 1) * DIFF.dmg,   // enemy shots hit harder every wave; light ships hit softer
+  });
+  e.aiType = type; e.role = type.role; if (type.windEff != null) e.windEff = type.windEff; e.bounty = type.bounty * (veteran ? 1.5 : 1);
+  e.name = veteran ? '★ ' + (type.label || 'Veteran') : type.label;
+  e.prefRange = rand(type.range[0], type.range[1]);
+  if (type.role === 'fireship') e.maxHp = e.hp = 6;   // a powder barge: any hit sets it off
+  e.speed = e.maxSpeed * 0.5;
+  ships.push(e);
+  return e;
+}
+
+// ---------- special events: a 20-wave campaign ending with the Pirate King, then endless ----------
+const EVENT_PLAN = { 3: 'treasure', 5: 'boss', 6: 'convoy', 8: 'siege', 10: 'kraken', 12: 'treasure', 14: 'convoy', 15: 'boss', 16: 'siege', 18: 'treasure', 20: 'king' };
+const FINAL_WAVE = 20;
+function eventFor(n) {
+  if (n <= FINAL_WAVE) return EVENT_PLAN[n] || null;
+  if (n % 5 === 0) return n % 10 === 0 ? 'kraken' : 'boss';
+  return Math.random() < 0.45 ? ['treasure', 'convoy', 'siege'][Math.floor(Math.random() * 3)] : null;
+}
+let waveEvent = null;                           // host: the current wave's objective
+let objective = { text: '', marker: null };     // HUD objective (host and guests); marker = [x, z, kind]
+let kraken = null;
+let victoryShown = false;
+
 function startWave(n) {
   wave = n;
   const alive = ships.filter(s => s.kind === 'p' && isAlive(s));
@@ -1903,73 +2188,202 @@ function startWave(n) {
   for (const s of alive) center.add(s.pos);
   if (alive.length) center.divideScalar(alive.length);
   const extra = Math.max(0, profiles.size - 1);
-  const isBoss = n % 5 === 0;
-  const k = n / 5;
-  const budget = (1.2 + n * 1.25 + extra * 2) * (isBoss ? 0.5 : 1);
-  const list = buildFleetList(n, budget);
+  let type = eventFor(n);
+  const siegeFort = type === 'siege' ? forts.filter(f => !f.destroyed).sort((a, b) => Math.hypot(a.x - center.x, a.z - center.z) - Math.hypot(b.x - center.x, b.z - center.z))[0] : null;
+  if (type === 'siege' && !siegeFort) type = null;
+  const budgetMul = { treasure: 0.5, convoy: 0.8, siege: 0.45, kraken: 0, king: 0.55, boss: 0.5 }[type] ?? 1;
+  const list = budgetMul ? buildFleetList(n, (1.2 + n * 1.25 + extra * 2) * budgetMul) : [];
+  waveEvent = null; objective = { text: '', marker: null };
 
-  // the whole fleet arrives together from one direction, in formation
+  // the whole fleet arrives together from one direction, in formation (or garrisons the besieged fort)
   const a = rand(0, Math.PI * 2);
   const dir = new THREE.Vector3(Math.sin(a), 0, Math.cos(a)), perp = new THREE.Vector3(Math.cos(a), 0, -Math.sin(a));
   fleet.angle = a; fleet.target = null; fleet.retargetT = 0; fleet.brokenT = 0;
   const line = list.filter(t => t.role === 'line').length;
   let li = 0, vets = 0;
-  list.forEach((type, i) => {
-    let fwd = 0, lat = (i - (list.length - 1) / 2) * 22;
-    if (type.role === 'heavy' || type.role === 'flag') fwd = -25;
-    if (type.role === 'ketch') fwd = 40;
-    if (type.role === 'raider') lat = (i % 2 ? 1 : -1) * rand(60, 90);
-    if (type.role === 'fireship') { fwd = -40; lat = (i % 2 ? 1 : -1) * rand(20, 50); }
-    let x = center.x + dir.x * (220 + fwd) + perp.x * lat, z = center.z + dir.z * (220 + fwd) + perp.z * lat;
-    [x, z] = clearSpot(x, z, type.scale >= 0.95);
-    const veteran = n >= 7 && type.role !== 'fireship' && Math.random() < Math.min(0.5, 0.08 + 0.025 * (n - 7));
+  list.forEach((t, i) => {
+    let x, z;
+    if (siegeFort) { const g = rand(0, Math.PI * 2), d = rand(45, 75); x = siegeFort.x + Math.sin(g) * d; z = siegeFort.z + Math.cos(g) * d; }
+    else {
+      let fwd = 0, lat = (i - (list.length - 1) / 2) * 22;
+      if (t.role === 'heavy' || t.role === 'flag') fwd = -25;
+      if (t.role === 'ketch') fwd = 40;
+      if (t.role === 'raider') lat = (i % 2 ? 1 : -1) * rand(60, 90);
+      if (t.role === 'fireship') { fwd = -40; lat = (i % 2 ? 1 : -1) * rand(20, 50); }
+      x = center.x + dir.x * (220 + fwd) + perp.x * lat; z = center.z + dir.z * (220 + fwd) + perp.z * lat;
+    }
+    [x, z] = clearSpot(x, z, t.scale >= 0.95);
+    const veteran = n >= 7 && t.role !== 'fireship' && Math.random() < Math.min(0.5, 0.08 + 0.025 * (n - 7));
     if (veteran) vets++;
-    const ci = type.role === 'flag' ? 5 : veteran ? 4 : Math.floor(Math.random() * 4);
-    const e = new Ship({
-      kind: 'e', colors: ENEMY_COLORS[ci], colorIdx: ci, scale: type.scale, masts: type.masts, cannons: type.guns,
-      x, z, heading: Math.atan2(center.x - x, center.z - z),
-      maxHp: Math.round((45 + n * 12) * type.hp * (veteran ? 1.35 : 1)),
-      maxSpeed: Math.min(13.5, 9.5 + n * 0.5) + type.speed,
-      turnRate: type.turn,
-      reloadTime: Math.max(1.9, 3.6 - n * 0.2) * type.reload,
-      aimErr: Math.max(0.025, 0.11 - n * 0.012) * (veteran ? 0.5 : 1),
-      dmg: (9 + 0.6 * n) * (type.dmg || 1) * (veteran ? 1.2 : 1),   // enemy shots hit harder every wave; light ships hit softer
-    });
-    e.aiType = type; e.role = type.role; if (type.windEff != null) e.windEff = type.windEff; e.bounty = type.bounty * (veteran ? 1.5 : 1);
-    e.name = veteran ? '★ ' + (type.label || 'Veteran') : type.label;
-    e.prefRange = rand(type.range[0], type.range[1]);
-    if (type.role === 'line') { e.slotOff = line > 1 ? (li / (line - 1) - 0.5) * 2.6 : 0; li++; }
+    const e = spawnEnemy(t, n, x, z, Math.atan2(center.x - x, center.z - z), veteran);
+    if (t.role === 'line') { e.slotOff = line > 1 ? (li / (line - 1) - 0.5) * 2.6 : 0; li++; }
     e.flank = i % 2 ? 1 : -1;
-    e.speed = e.maxSpeed * 0.5;
-    ships.push(e);
   });
 
-  if (isBoss) {
-    const [x, z] = clearSpot(center.x + dir.x * 245, center.z + dir.z * 245, true);
-    const boss = new Ship({
-      kind: 'b', colors: BOSS_COLORS, masts: 3, x, z, heading: Math.atan2(center.x - x, center.z - z),
-      scale: BOSS_SCALE, cannons: 6, maxHp: 450 + 200 * (k - 1) + 120 * extra, maxSpeed: 9.5,
-      reloadTime: 2.4, aimErr: 0.04, turnRate: 0.4, dmg: 12 + 0.6 * n,
-    });
-    boss.name = BOSS_NAMES[(k - 1) % BOSS_NAMES.length];
-    boss.mortarT = 6; boss.prefRange = rand(65, 85); boss.speed = 5; boss.role = 'heavy';
-    ships.push(boss);
-    announce(`⚠ BOSS: ${boss.name} ⚠`, 3.5);
-    sfxFor('boss');
-  } else {
-    announce(`Wave ${n} — ${list.length} ships approach!`);
-    sfxFor('bell');
+  switch (type) {
+    case 'boss': spawnBossShip(center, dir, n, extra); break;
+    case 'king': spawnPirateKing(center, dir, n, extra); break;
+    case 'kraken': spawnKraken(center, extra); break;
+    case 'treasure': spawnTreasure(center, n); break;
+    case 'convoy': spawnConvoy(center, n); break;
+    case 'siege': startSiege(siegeFort, extra); break;
+    default: announce(`Wave ${n} — ${list.length} ships approach!`); sfxFor('bell');
   }
   // tell captains what is coming
   const counts = {};
   for (const t of list) if (t.label) counts[t.label] = (counts[t.label] || 0) + 1;
   const parts = Object.entries(counts).map(([l, c]) => `${c} ${l}`);
   if (vets) parts.push(`${vets} ★ veteran${vets > 1 ? 's' : ''}`);
-  if (parts.length) after(2.8, () => notify('Spotted: ' + parts.join(' · ')));
+  if (parts.length) after(3.2, () => notify('Spotted: ' + parts.join(' · ')));
+}
+
+function spawnBossShip(center, dir, n, extra) {
+  const k = Math.max(1, Math.round(n / 5));
+  const [x, z] = clearSpot(center.x + dir.x * 245, center.z + dir.z * 245, true);
+  const boss = new Ship({
+    kind: 'b', colors: BOSS_COLORS, masts: 3, x, z, heading: Math.atan2(center.x - x, center.z - z),
+    scale: BOSS_SCALE, cannons: 6, maxHp: Math.round((450 + 200 * (k - 1) + 120 * extra) * DIFF.hp), maxSpeed: 9.5,
+    reloadTime: 2.4, aimErr: 0.04, turnRate: 0.4, dmg: (12 + 0.6 * n) * DIFF.dmg,
+  });
+  boss.name = BOSS_NAMES[(k - 1) % BOSS_NAMES.length];
+  boss.mortarT = 6; boss.prefRange = rand(65, 85); boss.speed = 5; boss.role = 'heavy';
+  ships.push(boss);
+  announce(`⚠ BOSS: ${boss.name} ⚠`, 3.5);
+  sfxFor('boss');
+}
+
+function spawnPirateKing(center, dir, n, extra) {
+  const [x, z] = clearSpot(center.x + dir.x * 250, center.z + dir.z * 250, true);
+  const king = new Ship({
+    kind: 'b', colors: KING_COLORS, masts: 3, x, z, heading: Math.atan2(center.x - x, center.z - z),
+    scale: 2.1, cannons: 7, maxHp: Math.round((2600 + 700 * extra) * DIFF.hp), maxSpeed: 9, reloadTime: 2.2,
+    aimErr: 0.03, turnRate: 0.38, dmg: (16 + 0.3 * n) * DIFF.dmg,
+  });
+  king.name = '☠ The Pirate King'; king.mortarT = 5; king.prefRange = 75; king.role = 'heavy'; king.isKing = true; king.kphase = 1;
+  king.aiType = { scale: 2.1, masts: 3, label: 'Pirate King' };
+  ships.push(king);
+  waveEvent = { type: 'king', king };
+  announce('☠ THE PIRATE KING ☠ — sink him and the seas are yours!', 4);
+  sfxFor('boss');
+}
+
+function spawnTreasure(center, n) {
+  const a = rand(0, Math.PI * 2);
+  const [x, z] = clearSpot(center.x + Math.sin(a) * 150, center.z + Math.cos(a) * 150, true);
+  const e = new Ship({ kind: 'e', colors: ENEMY_COLORS[6], colorIdx: 6, scale: 1.4, masts: 3, cannons: 2, x, z, heading: a,
+    maxHp: Math.round((45 + 12 * n) * 3 * DIFF.hp), maxSpeed: 11.5, turnRate: 0.45, reloadTime: 3, aimErr: 0.1, dmg: 8 });
+  e.role = 'merchant'; e.name = '💰 Treasure Galleon'; e.bounty = 6; e.aiType = { scale: 1.4, masts: 3, label: 'Treasure Galleon' };
+  e.speed = 6; e.goal = { x: x + Math.sin(a) * 600, z: z + Math.cos(a) * 600 }; e.start = { x, z };
+  ships.push(e);
+  waveEvent = { type: 'treasure', ship: e };
+  announce('💰 A treasure galleon is making a run for it!', 3);
+  sfxFor('bell');
+}
+
+function spawnConvoy(center, n) {
+  const a = rand(0, Math.PI * 2);
+  const [dx, dz] = clearSpot(center.x + Math.sin(a) * 520, center.z + Math.cos(a) * 520, true);
+  const list = [];
+  for (const side of [-1, 1]) {
+    const [x, z] = clearSpot(center.x + Math.cos(a) * 26 * side - Math.sin(a) * 25, center.z - Math.sin(a) * 26 * side - Math.cos(a) * 25, true);
+    const c = new Ship({ kind: 'a', colors: ENEMY_COLORS[7], colorIdx: 7, scale: 1.2, masts: 3, cannons: 0, x, z, heading: a,
+      maxHp: 220 + 20 * n, maxSpeed: 9.5, turnRate: 0.5 });
+    c.role = 'convoy'; c.name = '⚓ Merchantman'; c.goal = { x: dx, z: dz }; c.aiType = { scale: 1.2, masts: 3, label: 'Merchantman' };
+    c.speed = 4;
+    ships.push(c); list.push(c);
+  }
+  waveEvent = { type: 'convoy', ships: list, dest: { x: dx, z: dz }, arrived: 0 };
+  announce('⚓ Escort the merchant convoy to safe harbour!', 3);
+  sfxFor('bell');
+}
+
+function startSiege(f, extra) {
+  f.siege = true; f.maxHp = 440 + 120 * extra; f.hp = f.maxHp; f.destroyed = false; f.top.position.y = 0;
+  waveEvent = { type: 'siege', fort: f, t: 200 };
+  announce('🏰 Siege! Storm the fort before its garrison sinks you', 3.5);
+  sfxFor('bell');
+}
+function endSiege(f) { f.siege = false; f.maxHp = 220; if (!f.destroyed) f.hp = Math.min(f.hp, f.maxHp); }
+
+function spawnKraken(center, extra) {
+  kraken = new Kraken(center.x + 60, center.z + 60, Math.round((1400 + 450 * extra) * DIFF.hp));
+  waveEvent = { type: 'kraken' };
+  announce('🐙 Something stirs beneath the waves… THE KRAKEN!', 3.5);
+  sfxFor('boss');
+}
+
+// objectives tick on the host; text and markers are mirrored to guests
+function updateEvent(dt) {
+  const ev = waveEvent;
+  if (!ev || ev.done) { objective = { text: '', marker: null }; return; }
+  if (ev.type === 'treasure') {
+    const e = ev.ship;
+    if (!isAlive(e) || e.kind !== 'e') { ev.done = true; if (e.kind === 'a') announce('💰 The treasure galleon is ours!', 3); return; }
+    const left = 470 - Math.hypot(e.pos.x - e.start.x, e.pos.z - e.start.z);
+    if (left <= 0) { e.remove(); ev.done = true; announce('The treasure galleon escaped over the horizon…', 3); return; }
+    objective = { text: `💰 Catch the treasure galleon — ${Math.round(left)} m from escaping (board her for a fortune!)`, marker: [e.pos.x, e.pos.z, 'treasureShip'] };
+  } else if (ev.type === 'convoy') {
+    for (const c of ev.ships) {
+      if (isAlive(c) && !c.arrived && Math.hypot(c.pos.x - ev.dest.x, c.pos.z - ev.dest.z) < 35) {
+        c.arrived = true; ev.arrived++;
+        const r = 150 * wave;
+        for (const p of profiles.values()) giveGold(p, r);
+        announce(`⚓ A merchantman reached harbour! +${r} gold`, 2.5);
+        c.remove();
+      }
+    }
+    const afloat = ev.ships.filter(c => !c.arrived && isAlive(c));
+    if (!afloat.length) {
+      ev.done = true;
+      announce(ev.arrived ? `Convoy complete — ${ev.arrived}/${ev.ships.length} ships saved` : 'The convoy was lost…', 3);
+      return;
+    }
+    const d = Math.round(Math.min(...afloat.map(c => Math.hypot(c.pos.x - ev.dest.x, c.pos.z - ev.dest.z))));
+    objective = { text: `⚓ Escort the convoy to harbour — ${afloat.length} afloat, ${d} m to go`, marker: [ev.dest.x, ev.dest.z, 'harbor'] };
+  } else if (ev.type === 'siege') {
+    const f = ev.fort;
+    ev.t -= dt;
+    if (f.destroyed) {
+      ev.done = true; endSiege(f);
+      const r = 150 * wave;
+      for (const p of profiles.values()) giveGold(p, r);
+      announce(`🏰 The fort has fallen! +${r} gold`, 3);
+    } else if (ev.t <= 0) { ev.done = true; endSiege(f); announce('The siege failed — the fort holds', 3); }
+    else objective = { text: `🏰 Destroy the fort — ${Math.ceil(ev.t)}s left`, marker: [f.x, f.z, 'fort'] };
+  } else if (ev.type === 'kraken') {
+    if (!kraken || kraken.dying || kraken.dead) { ev.done = true; return; }
+    objective = { text: `🐙 Slay the Kraken — shoot its tentacles, and its head when it surfaces`, marker: [kraken.x, kraken.z, 'kraken'] };
+  } else if (ev.type === 'king') {
+    const k = ev.king;
+    if (!isAlive(k)) { ev.done = true; return; }
+    const f = k.hp / k.maxHp;
+    if (k.kphase === 1 && f < 0.66) {
+      k.kphase = 2; k.reloadTime *= 0.85;
+      announce('☠ "All hands to me!" — the Pirate King calls his raiders', 3);
+      for (let i = 0; i < 4; i++) spawnEnemy(i < 3 ? ENEMY_TYPES.raider : ENEMY_TYPES.fireship, wave, k.pos.x + rand(-40, 40), k.pos.z + rand(-40, 40), k.heading);
+    } else if (k.kphase === 2 && f < 0.33) {
+      k.kphase = 3; k.reloadTime *= 0.8; k.maxSpeed += 2; k.ammo = 'fire';
+      announce('🔥 The Pirate King is enraged — his guns are loaded with fire!', 3);
+      for (let i = 0; i < 2; i++) spawnEnemy(ENEMY_TYPES.raider, wave, k.pos.x + rand(-40, 40), k.pos.z + rand(-40, 40), k.heading);
+    }
+    objective = { text: `☠ Sink the Pirate King${k.kphase === 3 ? ' — he is enraged!' : ''}`, marker: null };
+  }
+}
+
+function victory() {
+  if (victoryShown) return;
+  victoryShown = true;
+  announce('☠ The Pirate King is sunk! The seas are yours! ☠', 4);
+  after(3.5, () => {
+    const data = { wave, players: [...profiles.values()].map(p => [p.name, p.earned, p.kills]) };
+    emit(['vic', data]);
+    showVictory(data);
+  });
 }
 
 function onShipSunk(s) {
   const killer = s.lastHitBy && s.lastHitBy.profile;
+  if (s.role === 'convoy') { announce('⚓ A merchantman has been sunk!', 2); return; }
   if (s.kind === 'a') { notify('Your escort has been sunk!', s.ownerProf); spawnCrates(s.pos, 1); return; }
   if (s.selfDestruct) return;   // fireships that blew themselves up pay nothing
   if (s.role === 'flag') { fleet.brokenT = 12; announce('Flagship sunk — the enemy crews lose heart!', 3); }
@@ -1997,7 +2411,7 @@ function onShipSunk(s) {
     if (p === killer) { giveGold(p, reward); p.kills++; notify(`Enemy sunk! +${reward} gold`, p); }
     else { const share = Math.round(reward * 0.4); giveGold(p, share); notify(`Crewmate sank a ship! +${share} gold`, p); }
   }
-  if (s.kind === 'b') { announce(`${s.name} has been sunk!`, 3); spawnCrates(s.pos, 5, 9); }
+  if (s.kind === 'b') { announce(`${s.name} has been sunk!`, 3); spawnCrates(s.pos, 5, 9); if (s.isKing) victory(); }
   else spawnCrates(s.pos);
 }
 
@@ -2077,6 +2491,7 @@ function resolveBoarding(prof, choice) {
     notify(`💰 Plundered ${Math.round(loot * 2.5)} gold and ship's stores (+20% hull)`, prof);
     e.selfDestruct = true; e.hp = 0; e.startSinking();
   } else if (choice === 'capture') {
+    if (e.role === 'merchant') e.role = 'line';
     e.kind = 'a'; e.ownerProf = prof; e.profile = prof; e.station = escortCount(prof) % 2 ? -1 : 1;
     e.name = 'Captured ' + (e.aiType && e.aiType.label ? e.aiType.label.replace(/^[^A-Za-z]+/, '') : 'Cutter');
     e.hp = e.maxHp * 0.6; e.lastHitBy = null; e.reloadMul = 1; e.engaged = true; e.regen = e.maxHp / 80;
@@ -2111,7 +2526,9 @@ function hostLogic(dt) {
   if (gameMode !== 'coop') return;
   const alive = [...profiles.values()].some(p => isAlive(p.ship));
   if (!alive && !overPending) { overPending = true; announce('All hands lost!', 3); after(3.5, gameOver); }
-  if (wave > 0 && alive && !ships.some(s => teamOf(s) === 'E' && !s.sinking && !s.dead)) {
+  updateEvent(dt);
+  const eventOpen = (waveEvent && !waveEvent.done) || (kraken && !kraken.dying && !kraken.dead);
+  if (wave > 0 && alive && !eventOpen && !ships.some(s => teamOf(s) === 'E' && !s.sinking && !s.dead)) {
     if (waveClearT < 0) {
       waveClearT = 7;
       announce(`Wave ${wave} cleared!`, 2.5);
@@ -2340,8 +2757,11 @@ function buildSnapshot() {
       Math.ceil(s.hp), s.maxHp, s.sinking ? 1 : 0, s.colorIdx, s.cannonCount,
       r2(s.reload.port), r2(s.reload.star), r2(s.reloadTime), s.pid, s.name, s.design ? designArr(s.design) : s.aiType ? ['ai', s.aiType.scale, s.aiType.masts, s.role] : 0,
       (s.burnT > 0 ? 1 : 0) | (s.slowT > 0 ? 2 : 0) | (s.boostT > 0 ? 4 : 0) | (s.repairing ? 8 : 0) | (s.smokeT > 0 ? 16 : 0) | (Math.min(7, s.burnStacks | 0) << 5)]),
-    f: forts.map(f => [Math.ceil(f.hp), f.destroyed ? 1 : 0, r2(f.aim)]),
+    f: forts.map(f => [Math.ceil(f.hp), f.destroyed ? 1 : 0, r2(f.aim), f.maxHp]),
     c: crates.map(c => [c.id, r2(c.x), r2(c.z)]),
+    ob: objective,
+    kr: kraken && !kraken.dead ? [r2(kraken.x), r2(kraken.z), kraken.surfaced ? 1 : 0, Math.ceil(kraken.hp), kraken.maxHp, kraken.dying ? 1 : 0,
+      kraken.tentacles.map(k => [k.id, r2(k.x), r2(k.z), k.state, r2(k.t), r2(k.yaw), r2(k.slamYaw)])] : 0,
     p: [...profiles.values()].map(p => [p.id, p.name, p.gold, p.earned, p.kills,
       p.up, r2(p.respawnT), p.colorIdx, p.ammo, p.cd, p.board ? [p.board.phase, r2(p.board.phase === 'fight' ? p.board.t / p.board.dur : p.board.t), p.board.target.name || 'ship', boardLoot(p.board.target)] : 0]),
     k: kegs.map(k => [k.id, r2(k.x), r2(k.z)]),
@@ -2456,6 +2876,7 @@ function handleEvent(ev) {
     case 't': if (ev[2] == null || ev[2] === myId) toast(ev[1]); break;
     case 's': if (ev[2] == null || ev[2] === myId) sfx(ev[1]); break;
     case 'over': showGameOver(ev[1]); break;
+    case 'vic': showVictory(ev[1]); break;
   }
 }
 
@@ -2469,10 +2890,10 @@ function applySnapshot(m) {
     seen.add(id);
     let s = netShips.get(id);
     if (!s) {
-      if (kind === 'p' || kind === 'a') s = makePlayerShip(designFromArr(des), { id, colorIdx: ci, x, z, heading: h, cannons: cn, maxHp });
-      else s = new Ship({ kind, id, colors: kind === 'b' ? BOSS_COLORS : ENEMY_COLORS[ci % ENEMY_COLORS.length], colorIdx: ci,
-        x, z, heading: h, scale: kind === 'b' ? BOSS_SCALE : (des && des[0] === 'ai' ? des[1] : 1),
-        masts: kind === 'b' ? 3 : (des && des[0] === 'ai' ? des[2] : 2), cannons: cn, maxHp });
+      const ai = des && des[0] === 'ai';
+      if ((kind === 'p' || kind === 'a') && !ai) s = makePlayerShip(designFromArr(des), { id, colorIdx: ci, x, z, heading: h, cannons: cn, maxHp });
+      else s = new Ship({ kind, id, colors: kind === 'b' ? (ai && des[1] > 2 ? KING_COLORS : BOSS_COLORS) : ENEMY_COLORS[ci % ENEMY_COLORS.length], colorIdx: ci,
+        x, z, heading: h, scale: ai ? des[1] : kind === 'b' ? BOSS_SCALE : 1, masts: ai ? des[2] : kind === 'b' ? 3 : 2, cannons: cn, maxHp });
       s.remote = true; s.pid = pid; s.name = name; s.hp = hp;
       netShips.set(id, s); ships.push(s);
     }
@@ -2492,8 +2913,24 @@ function applySnapshot(m) {
   for (const [id, s] of netShips) if (!seen.has(id)) { if (!s.dead) s.remove(); netShips.delete(id); }
   netMe = mine;
 
-  m.f.forEach(([hp, d, aim], i) => { const f = forts[i]; if (!f) return; f.hp = hp; f.aim = aim; if (d) f.setDestroyed(true); else f.destroyed = false; });
+  m.f.forEach(([hp, d, aim, mx], i) => { const f = forts[i]; if (!f) return; f.hp = hp; if (mx) f.maxHp = mx; f.aim = aim; if (d) f.setDestroyed(true); else f.destroyed = false; });
 
+  if (m.ob) objective = m.ob;
+  if (m.kr) {
+    const [kx, kz, up, hp, mx, dying, tl] = m.kr;
+    if (!kraken) kraken = new Kraken(kx, kz, mx);
+    Object.assign(kraken, { x: kx, z: kz, surfaced: !!up, hp, maxHp: mx });
+    if (dying) kraken.dying = true;
+    const seen = new Set();
+    for (const [id, x, z, st, t, yaw, sy] of tl) {
+      seen.add(id);
+      let k = kraken.tentacles.find(q => q.id === id);
+      if (!k) { k = kraken.makeTentacle(id, x, z); kraken.tentacles.push(k); }
+      if (k.state !== st) { k.state = st; k.t = t; }
+      k.yaw = yaw; k.slamYaw = sy;
+    }
+    for (const k of kraken.tentacles) if (!seen.has(k.id)) k.state = 'gone';
+  } else if (kraken && !kraken.dying) { kraken.dispose(); kraken = null; }
   const ids = new Set(m.c.map(c => c[0]));
   for (let i = crates.length - 1; i >= 0; i--) if (!ids.has(crates[i].id)) { scene.remove(crates[i].m); crates.splice(i, 1); }
   for (const [id, x, z] of m.c) if (!crates.some(c => c.id === id)) addCrate(id, x, z);
@@ -2641,6 +3078,17 @@ function pause() {
 }
 function resume() { state = 'playing'; setOverlay(''); lockPointer(); clock.getDelta(); }
 
+function showVictory(data) {
+  state = 'victory';
+  closeShop(true);
+  if (document.pointerLockElement) document.exitPointerLock();
+  const rows = data.players.map(([n, e, k]) => `<tr><td>${esc(n)}</td><td>${e} gold plundered · ${k} ships sunk</td></tr>`).join('');
+  setOverlay(`<h1>VICTORY!</h1><h2>The Pirate King is sunk — the seven seas bow to you.</h2>
+    <div style="font-size:20px">Waves conquered: <b>${data.wave}</b></div>
+    <table>${rows}</table>
+    <div class="row"><button data-act="endless">⚔ Sail On — Endless Mode</button> <button class="ghost" data-act="menu">Main Menu</button></div>`);
+}
+
 function showGameOver(data) {
   state = 'over'; gameActive = false;
   closeShop(true);
@@ -2691,6 +3139,7 @@ $('overlay').addEventListener('click', (e) => {
     case 'mode-pvp': gameMode = 'pvp'; renderHostLobby(); broadcastLobby(); break;
     case 'start': if (net.mode === 'host') startMatch(); break;
     case 'again': if (net.mode !== 'guest') startMatch(); break;
+    case 'endless': state = 'playing'; setOverlay(''); lockPointer(); clock.getDelta(); announce('Endless mode — how long can you last?', 3); break;
     case 'resume': resume(); break;
     case 'menu': showMainMenu(); break;
   }
@@ -2777,6 +3226,7 @@ function simulateShot(p, v, t, pts) {
     if (pts) pts.push(p.clone());
     for (const s of ships) if (aimCanHit(s) && hitShip(s, p)) return { end: p, hit: 'target' };
     for (const f of forts) if (f.hit(p)) return { end: p, hit: 'target' };
+    if (kraken && kraken.hitTest(p)) return { end: p, hit: 'target' };
     for (const isl of islands) {
       const d = Math.hypot(p.x - isl.x, p.z - isl.z);
       if (d < isl.r && p.y < isl.h * (1 - d / isl.r) + 1.5) return { end: p, hit: 'land' };
@@ -3158,7 +3608,9 @@ function updateHUD() {
   }
   // boss bar
   const bb = $('bossbar');
-  if (boss) { bb.style.display = 'block'; $('bossName').textContent = '☠ ' + boss.name + ' ☠'; $('bossFill').style.width = (boss.hp / boss.maxHp * 100) + '%'; }
+  $('objective').textContent = objective.text;
+  if (kraken && !kraken.dead && !kraken.dying) { bb.style.display = 'block'; $('bossName').textContent = kraken.name; $('bossFill').style.width = (kraken.hp / kraken.maxHp * 100) + '%'; }
+  else if (boss) { bb.style.display = 'block'; $('bossName').textContent = '☠ ' + boss.name + ' ☠'; $('bossFill').style.width = (boss.hp / boss.maxHp * 100) + '%'; }
   else bb.style.display = 'none';
   // scoreboard (online)
   const sb = $('scoreboard');
@@ -3299,6 +3751,8 @@ function step(dt) {
   if (host) collisions();
   updateBalls(dt, time, host);
   updateWarnings(dt, time);
+  if (kraken) { kraken.update(dt, time, host && gameActive); if (kraken.dead) kraken = null; }
+  updateBeacon(time);
   if (host) updateWind(dt);
   updateStreaks(dt, time, focusPos());
   updateParticles(dt);
@@ -3321,11 +3775,12 @@ if (location.search.includes('debug')) window.__dbg = {
   profiles, islands, reefs, forts, fleet, shallowAt, startWave, applyBuy, useAbility, triggerAbility, selectAmmo,
   gold(n) { const p = profiles.get(myId); p.gold += n; },
   wind, sailEfficiency, windFactor, startBoarding, resolveBoarding, boardCandidate,
+  get kraken() { return kraken; }, spawnEnemyTest: spawnEnemy, get objective() { return objective; }, get waveEvent() { return waveEvent; }, eventFor,
   applyBurnTest(s, n, per) { s.lastHitT = -99; applyBurn(s, n, per, null); },
 };
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
-  const frozen = net.mode === 'solo' && (state === 'paused' || shopOpen);
+  const frozen = net.mode === 'solo' && (state === 'paused' || state === 'victory' || shopOpen);
   if (!frozen) step(dt);
   renderer.render(scene, camera);
 });
