@@ -488,7 +488,7 @@ const ENEMY_COLORS = [   // 0-3 regular, 4 veteran, 5 flagship
 // enemy roles: each type plays a part in the fleet's tactics
 const ENEMY_TYPES = {
   cutter:   { role: 'line', label: '', scale: 1, masts: 2, guns: 4, hp: 1, speed: 0, turn: 0.55, reload: 1, bounty: 1, cost: 1, from: 1, weight: 3, range: [50, 70] },
-  raider:   { role: 'raider', label: 'Raider', scale: 0.8, masts: 1, guns: 3, hp: 0.6, speed: 4, turn: 0.95, reload: 0.7, bounty: 0.9, cost: 1, from: 2, weight: 2, range: [30, 42] },
+  raider:   { role: 'raider', label: 'Raider', scale: 0.8, masts: 1, guns: 3, hp: 0.45, dmg: 0.65, speed: 4, turn: 0.95, reload: 0.7, bounty: 0.75, cost: 1, from: 2, weight: 2, range: [30, 42] },
   ketch:    { role: 'ketch', label: 'Bomb Ketch', scale: 0.9, masts: 2, guns: 2, hp: 0.8, speed: -1, turn: 0.55, reload: 1.2, bounty: 1.2, cost: 1.5, from: 3, weight: 1.2, range: [110, 140] },
   fireship: { role: 'fireship', label: '🔥 Fireship', scale: 0.85, masts: 1, guns: 0, hp: 0.5, speed: 5, turn: 0.85, reload: 1, bounty: 0.8, cost: 1, from: 4, weight: 1, range: [0, 0] },
   heavy:    { role: 'heavy', label: 'Heavy', scale: 1.3, masts: 3, guns: 6, hp: 1.9, speed: -3, turn: 0.38, reload: 1.25, bounty: 1.7, cost: 2.5, from: 6, weight: 1.2, range: [40, 55] },
@@ -1865,7 +1865,7 @@ function startWave(n) {
       turnRate: type.turn,
       reloadTime: Math.max(1.9, 3.6 - n * 0.2) * type.reload,
       aimErr: Math.max(0.025, 0.11 - n * 0.012) * (veteran ? 0.5 : 1),
-      dmg: (9 + 0.6 * n) * (veteran ? 1.2 : 1),          // enemy shots hit harder every wave
+      dmg: (9 + 0.6 * n) * (type.dmg || 1) * (veteran ? 1.2 : 1),   // enemy shots hit harder every wave; light ships hit softer
     });
     e.aiType = type; e.role = type.role; e.bounty = type.bounty * (veteran ? 1.5 : 1);
     e.name = veteran ? '★ ' + (type.label || 'Veteran') : type.label;
