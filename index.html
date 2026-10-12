@@ -1,0 +1,2018 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Broadside! — Pirate Ship Battle</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b2a44; font-family: Georgia, "Times New Roman", serif; color: #f6e7c1; user-select: none; }
+  canvas { display: block; }
+  #hud { position: fixed; inset: 0; pointer-events: none; display: none; }
+  .bar { height: 14px; background: rgba(0,0,0,.45); border: 2px solid #c9a45c; border-radius: 8px; overflow: hidden; }
+  .bar > div { height: 100%; width: 100%; background: linear-gradient(#7fe07a, #2f9a3a); transition: width .15s; }
+  #topleft { position: absolute; top: 18px; left: 18px; width: 320px; text-shadow: 0 2px 3px #000; }
+  #topleft .label { font-size: 14px; letter-spacing: 3px; margin-bottom: 4px; }
+  #topleft .bar { height: 18px; }
+  #stats { margin-top: 8px; font-size: 18px; }
+  #hint { margin-top: 6px; font-size: 14px; opacity: .75; }
+  #bottom { position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%); display: flex; gap: 26px; align-items: flex-end; text-shadow: 0 2px 3px #000; }
+  .reload { width: 170px; font-size: 13px; letter-spacing: 2px; text-align: center; opacity: .65; transition: opacity .15s, transform .15s; }
+  .reload.aim { opacity: 1; transform: scale(1.08); }
+  .reload .bar > div { background: linear-gradient(#ffd977, #c98a1a); transition: none; }
+  .reload span { display: block; margin-bottom: 4px; }
+  #sailInfo { text-align: center; min-width: 140px; }
+  #sails { font-size: 20px; letter-spacing: 2px; }
+  #speed { font-size: 14px; opacity: .85; }
+  #minimap { position: absolute; right: 18px; bottom: 18px; border-radius: 50%; border: 3px solid #c9a45c; background: rgba(8,40,70,.6); }
+  #banner { position: absolute; top: 22%; width: 100%; text-align: center; font-size: 50px; font-weight: bold; color: #ffe6a0; text-shadow: 0 4px 10px #000, 0 0 2px #000; opacity: 0; transition: opacity .4s; }
+  #toast { position: absolute; top: 32%; width: 100%; text-align: center; font-size: 24px; color: #b6ffb0; text-shadow: 0 2px 6px #000; opacity: 0; transition: opacity .3s; }
+  #respawn { position: absolute; top: 45%; width: 100%; text-align: center; font-size: 30px; text-shadow: 0 2px 6px #000; }
+  #bossbar { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); width: 440px; text-align: center; display: none; text-shadow: 0 2px 4px #000; }
+  #bossbar .bar { height: 16px; border-color: #b8860b; }
+  #bossbar .bar > div { background: linear-gradient(#ff6a5a, #9a1010); }
+  #bossName { font-size: 20px; letter-spacing: 2px; color: #ffb0a0; margin-bottom: 4px; }
+  #scoreboard { position: absolute; top: 18px; right: 18px; min-width: 200px; background: rgba(20,12,4,.55); border: 2px solid #c9a45c; border-radius: 8px; padding: 8px 12px; font-size: 14px; display: none; }
+  #scoreboard div { display: flex; justify-content: space-between; gap: 14px; }
+  .tag { position: absolute; transform: translate(-50%, -100%); text-align: center; }
+  .tag .nm { font-size: 13px; text-shadow: 0 1px 3px #000; white-space: nowrap; margin-bottom: 2px; }
+  .tag .ebar { width: 70px; height: 8px; margin: 0 auto; background: rgba(0,0,0,.55); border: 1px solid #000; border-radius: 4px; overflow: hidden; }
+  .tag .ebar > div { height: 100%; }
+  #dmg { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 45%, rgba(200,0,0,.55)); opacity: 0; transition: opacity .35s; }
+  #overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(5,20,35,.55); }
+  #panel, .shopbox { text-align: center; max-width: 640px; max-height: 94vh; overflow: auto; padding: 30px 40px; background: rgba(40,24,10,.9); border: 3px solid #c9a45c; border-radius: 14px; box-shadow: 0 10px 40px rgba(0,0,0,.6); }
+  #panel h1 { margin: 0 0 6px; font-size: 54px; color: #ffd977; text-shadow: 0 4px 0 #6b3d10; }
+  #panel h2 { margin: 0 0 16px; font-weight: normal; font-style: italic; opacity: .85; }
+  #panel table { margin: 10px auto; border-collapse: collapse; font-size: 15px; text-align: left; }
+  #panel td { padding: 3px 12px; }
+  #panel td:first-child { color: #ffd977; text-align: right; white-space: nowrap; }
+  #panel details { margin-top: 12px; cursor: pointer; }
+  .row { margin: 12px 0; }
+  .err { color: #ff8a7a; margin: 8px 0; }
+  .code { font-size: 54px; letter-spacing: 12px; color: #ffd977; font-weight: bold; user-select: text; }
+  .plist { list-style: none; padding: 0; margin: 8px 0; font-size: 18px; }
+  button { font-family: inherit; font-size: 18px; padding: 10px 22px; margin: 4px 6px; color: #2a1606; background: linear-gradient(#ffe39a, #d9a640); border: 2px solid #6b3d10; border-radius: 8px; cursor: pointer; box-shadow: 0 3px 0 #6b3d10; }
+  button:hover:not(:disabled) { filter: brightness(1.12); }
+  button:disabled { opacity: .45; cursor: default; }
+  button.ghost { background: rgba(0,0,0,.2); color: #f6e7c1; border-color: #c9a45c; box-shadow: none; }
+  input { font-family: inherit; font-size: 18px; padding: 8px 12px; border-radius: 8px; border: 2px solid #c9a45c; background: rgba(0,0,0,.35); color: #fff; text-align: center; outline: none; }
+  #shop { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(5,20,35,.45); }
+  .shopbox h2 { margin: 0; font-size: 34px; color: #ffd977; }
+  .shopbox .gold { font-size: 22px; margin: 8px 0 14px; }
+  .cards { display: grid; grid-template-columns: repeat(3, 180px); gap: 12px; margin-bottom: 14px; }
+  .card { background: rgba(0,0,0,.3); border: 1px solid #8a6a30; border-radius: 10px; padding: 10px; display: flex; flex-direction: column; justify-content: space-between; }
+  .card .cn { font-size: 16px; color: #ffd977; }
+  .card .cd { font-size: 13px; opacity: .85; margin: 4px 0; }
+  .card .pips { color: #ffd977; letter-spacing: 3px; }
+  .card button { font-size: 15px; padding: 6px 10px; }
+</style>
+</head>
+<body>
+<div id="hud">
+  <div id="topleft">
+    <div class="label">HULL INTEGRITY</div>
+    <div class="bar"><div id="hpFill"></div></div>
+    <div id="stats"><span id="gold">Gold: 0</span> &nbsp;·&nbsp; <span id="wave">Wave 1</span> &nbsp;·&nbsp; <span id="foes"></span></div>
+    <div id="hint">[B] Shipwright — spend gold on upgrades</div>
+  </div>
+  <div id="bossbar"><div id="bossName"></div><div class="bar"><div id="bossFill"></div></div></div>
+  <div id="scoreboard"></div>
+  <div id="bottom">
+    <div class="reload" id="rPort"><span>◀ PORT (Q)</span><div class="bar"><div></div></div></div>
+    <div id="sailInfo"><div id="sails"></div><div id="speed">0 knots</div></div>
+    <div class="reload" id="rStar"><span>STARBOARD (E) ▶</span><div class="bar"><div></div></div></div>
+  </div>
+  <canvas id="minimap" width="180" height="180"></canvas>
+  <div id="banner"></div>
+  <div id="toast"></div>
+  <div id="respawn"></div>
+</div>
+<div id="dmg"></div>
+<div id="shop"><div class="shopbox" id="shopBox"></div></div>
+<div id="overlay"><div id="panel"></div></div>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script type="importmap">
+{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+// ============================================================
+//  Constants & helpers
+// ============================================================
+const G = 20;              // gravity for cannonballs
+const BALL_SPEED = 55;
+const BOSS_SCALE = 1.8;
+const CANNON_SETS = {
+  4: [-3, -1, 1, 3],
+  5: [-4.2, -2.4, -0.6, 1.2, 3],
+  6: [-4.8, -3.2, -1.6, 0, 1.6, 3.2],
+};
+const PEER_PREFIX = 'broadside-pirates-v1-';
+const MAX_PLAYERS = 4;
+const REPAIR_COST = 100;
+const UPGRADES = {
+  armor:   { icon: '🛡', name: 'Reinforced Hull', desc: '+25 max hull', max: 5, cost: [150, 250, 400, 600, 850] },
+  guns:    { icon: '💥', name: 'Heavy Shot', desc: '+20% cannon damage', max: 5, cost: [200, 320, 480, 700, 950] },
+  reload:  { icon: '⏱', name: 'Drilled Gun Crews', desc: '-12% reload time', max: 5, cost: [150, 260, 400, 580, 800] },
+  sails:   { icon: '⛵', name: 'Silk Sails', desc: '+10% speed & turning', max: 5, cost: [120, 220, 350, 520, 750] },
+  cannons: { icon: '⚙', name: 'Extra Gun Ports', desc: '+1 cannon per side', max: 2, cost: [500, 900] },
+  repair:  { icon: '🔨', name: 'Field Repairs', desc: 'Restore full hull', max: Infinity },
+};
+const BOSS_NAMES = ['The Black Kraken', "Leviathan's Wrath", 'The Crimson Tide', 'Dread Galleon Morrow', 'The Sea Hag'];
+
+const rand = (a, b) => a + Math.random() * (b - a);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const r2 = (v) => Math.round(v * 100) / 100;
+const angDiff = (a, b) => { let d = (a - b) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; if (d < -Math.PI) d += Math.PI * 2; return d; };
+const rv = (s) => new THREE.Vector3(rand(-s, s), rand(-s, s), rand(-s, s));
+const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function mulberry32(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const $ = (id) => document.getElementById(id);
+const ORIGIN = new THREE.Vector3();
+const UP = new THREE.Vector3(0, 1, 0);
+
+// ============================================================
+//  Renderer, scene, sky, lights
+// ============================================================
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+const FOG_COLOR = new THREE.Color(0xa9d3ec);
+scene.fog = new THREE.Fog(FOG_COLOR, 140, 430);
+const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.5, 2500);
+
+const sky = new THREE.Mesh(
+  new THREE.SphereGeometry(1200, 32, 16),
+  new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false, fog: false,
+    uniforms: { top: { value: new THREE.Color(0x2f78c4) }, bottom: { value: FOG_COLOR.clone() } },
+    vertexShader: `varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+    fragmentShader: `uniform vec3 top; uniform vec3 bottom; varying vec3 vP;
+      void main(){ float h = clamp(vP.y * 2.2, 0.0, 1.0); gl_FragColor = vec4(mix(bottom, top, h), 1.0);
+      #include <colorspace_fragment>
+      }`,
+  })
+);
+scene.add(sky);
+
+scene.add(new THREE.HemisphereLight(0xd6ecff, 0x1d4a6b, 1.2));
+const sun = new THREE.DirectionalLight(0xfff0d0, 2.4);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -70, right: 70, top: 70, bottom: -70, near: 1, far: 400 });
+sun.shadow.bias = -0.0005;
+scene.add(sun, sun.target);
+const SUN_OFFSET = new THREE.Vector3(90, 130, 40);
+
+// ============================================================
+//  Ocean (CPU-displaced low-poly water that follows the camera focus)
+// ============================================================
+const OCEAN_SIZE = 900, OCEAN_SEG = 150, CELL = OCEAN_SIZE / OCEAN_SEG;
+const oceanGeo = new THREE.PlaneGeometry(OCEAN_SIZE, OCEAN_SIZE, OCEAN_SEG, OCEAN_SEG);
+oceanGeo.rotateX(-Math.PI / 2);
+const oceanBase = oceanGeo.attributes.position.array.slice();
+oceanGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(oceanBase.length), 3));
+const ocean = new THREE.Mesh(oceanGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.3, metalness: 0.1, flatShading: true }));
+ocean.receiveShadow = true;
+ocean.frustumCulled = false;
+scene.add(ocean);
+const C_DEEP = new THREE.Color(0x0b4a7a), C_MID = new THREE.Color(0x1b7db4), C_CREST = new THREE.Color(0x9bdcec);
+
+function waveHeight(x, z, t) {
+  return 0.55 * Math.sin(x * 0.045 + t * 0.9)
+       + 0.45 * Math.sin(z * 0.06 - t * 1.1)
+       + 0.30 * Math.sin((x + z) * 0.09 + t * 1.6)
+       + 0.15 * Math.sin((x * 0.7 - z) * 0.17 - t * 2.1);
+}
+
+function updateOcean(t, cx, cz) {
+  ocean.position.set(Math.round(cx / CELL) * CELL, 0, Math.round(cz / CELL) * CELL);
+  const p = oceanGeo.attributes.position.array, c = oceanGeo.attributes.color.array;
+  const ox = ocean.position.x, oz = ocean.position.z;
+  for (let i = 0; i < p.length; i += 3) {
+    const h = waveHeight(oceanBase[i] + ox, oceanBase[i + 2] + oz, t);
+    p[i + 1] = h;
+    const k = clamp((h + 1.45) / 2.9, 0, 1);
+    let a, b, f;
+    if (k < 0.72) { a = C_DEEP; b = C_MID; f = k / 0.72; } else { a = C_MID; b = C_CREST; f = (k - 0.72) / 0.28; }
+    c[i] = a.r + (b.r - a.r) * f; c[i + 1] = a.g + (b.g - a.g) * f; c[i + 2] = a.b + (b.b - a.b) * f;
+  }
+  oceanGeo.attributes.position.needsUpdate = true;
+  oceanGeo.attributes.color.needsUpdate = true;
+}
+
+// ============================================================
+//  Ship model (procedural)
+// ============================================================
+function hullShape() {
+  // drawn in (x, -z): bow points to +Z after rotation
+  const s = new THREE.Shape();
+  s.moveTo(-1.9, 6);
+  s.lineTo(1.9, 6);
+  s.lineTo(2.25, 1);
+  s.quadraticCurveTo(2.25, -4.5, 0, -7.5);
+  s.quadraticCurveTo(-2.25, -4.5, -2.25, 1);
+  s.lineTo(-1.9, 6);
+  return s;
+}
+const HULL_GEO = new THREE.ExtrudeGeometry(hullShape(), { depth: 2.6, bevelEnabled: true, bevelThickness: 0.2, bevelSize: 0.2, bevelSegments: 1, curveSegments: 10 })
+  .rotateX(-Math.PI / 2).translate(0, -1.1, 0);
+const STRIPE_GEO = new THREE.ExtrudeGeometry(hullShape(), { depth: 0.3, bevelEnabled: false, curveSegments: 10 })
+  .rotateX(-Math.PI / 2).scale(1.09, 1, 1.04).translate(0, 0.95, 0);
+const CANNON_GEO = new THREE.CylinderGeometry(0.2, 0.28, 1.4, 8).rotateZ(Math.PI / 2);
+
+function sailGeo(w, h) {
+  const g = new THREE.PlaneGeometry(w, h, 8, 4);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const nx = p.getX(i) / (w / 2), ny = p.getY(i) / (h / 2);
+    p.setZ(i, (1 - nx * nx) * (1 - 0.3 * ny * ny) * h * 0.2);
+  }
+  g.computeVertexNormals();
+  return g;
+}
+
+function jollyRogerTexture() {
+  const c = document.createElement('canvas'); c.width = 128; c.height = 84;
+  const g = c.getContext('2d');
+  g.fillStyle = '#111'; g.fillRect(0, 0, 128, 84);
+  g.strokeStyle = '#eee'; g.lineWidth = 7; g.lineCap = 'round';
+  g.beginPath(); g.moveTo(40, 68); g.lineTo(88, 40); g.moveTo(40, 40); g.lineTo(88, 68); g.stroke();
+  g.fillStyle = '#eee';
+  g.beginPath(); g.arc(64, 32, 17, 0, Math.PI * 2); g.fill(); g.fillRect(55, 40, 18, 14);
+  g.fillStyle = '#111';
+  g.beginPath(); g.arc(57, 31, 4.5, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.arc(71, 31, 4.5, 0, Math.PI * 2); g.fill();
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+const JOLLY_ROGER = jollyRogerTexture();
+
+function buildShip(c, isPlayer) {
+  const group = new THREE.Group();
+  const M = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.85, flatShading: true, ...extra });
+  const hullM = M(c.hull), deckM = M(0xa07a4c), trimM = M(c.trim, { roughness: 0.5, metalness: 0.3 });
+  const woodM = M(0x4a2f1a), sailM = M(c.sail, { side: THREE.DoubleSide }), ironM = M(0x1d1d1d, { metalness: 0.7, roughness: 0.4 });
+  const glowM = new THREE.MeshStandardMaterial({ color: 0xffd27a, emissive: 0xffa630, emissiveIntensity: 1.2 });
+  const add = (geo, mat, x, y, z, rx = 0, ry = 0, rz = 0) => {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x, y, z); m.rotation.set(rx, ry, rz);
+    m.castShadow = true; m.receiveShadow = true;
+    group.add(m); return m;
+  };
+
+  add(HULL_GEO, [deckM, hullM], 0, 0, 0);
+  add(STRIPE_GEO, trimM, 0, 0, 0);
+  // stern castle + forecastle
+  add(new THREE.BoxGeometry(3.9, 1.4, 3.4), hullM, 0, 2.35, -4.4);
+  add(new THREE.BoxGeometry(4.1, 0.18, 3.6), trimM, 0, 3.1, -4.4);
+  add(new THREE.BoxGeometry(2.6, 0.5, 0.06), glowM, 0, 2.3, -6.12);
+  add(new THREE.BoxGeometry(2.8, 0.7, 2.4), hullM, 0, 1.95, 4.4);
+  // side rails
+  add(new THREE.BoxGeometry(0.15, 0.45, 6.5), trimM, 2.1, 1.9, 0);
+  add(new THREE.BoxGeometry(0.15, 0.45, 6.5), trimM, -2.1, 1.9, 0);
+  // bowsprit
+  add(new THREE.CylinderGeometry(0.1, 0.18, 5, 6), woodM, 0, 2.5, 8.6, Math.PI / 2 - 0.3);
+
+  // masts, yards and sails
+  const sails = [];
+  const mast = (z, h, lower, upper) => {
+    add(new THREE.CylinderGeometry(0.16, 0.26, h, 8), woodM, 0, 1.5 + h / 2, z);
+    for (const [w, sh, top] of [lower, upper]) {
+      add(new THREE.CylinderGeometry(0.08, 0.08, w + 0.6, 6), woodM, 0, top, z + 0.2, 0, 0, Math.PI / 2);
+      const s = add(sailGeo(w, sh), sailM, 0, top - sh / 2, z + 0.35);
+      sails.push({ mesh: s, top, h: sh });
+    }
+  };
+  mast(2.6, 11, [5.6, 3.8, 6.4], [4.2, 3.0, 10.0]);
+  mast(-1.4, 13.5, [6.6, 4.4, 7.0], [5.0, 3.4, 11.2]);
+  add(new THREE.CylinderGeometry(0.65, 0.5, 0.5, 10), woodM, 0, 12.3, -1.4);
+
+  // flag
+  const flagGeo = new THREE.PlaneGeometry(2.2, 1.45, 4, 1).translate(1.1, 0, 0);
+  const flagM = isPlayer
+    ? new THREE.MeshStandardMaterial({ map: JOLLY_ROGER, side: THREE.DoubleSide, roughness: 0.9 })
+    : M(c.flag, { side: THREE.DoubleSide });
+  const flag = add(flagGeo, flagM, 0, 14.3, -1.4, 0, Math.PI / 2, 0);
+  return { group, sails, flag, ironM };
+}
+
+const PLAYER_COLORS = [
+  { hull: 0x6b4226, trim: 0xd4a017, sail: 0xf3ead2 },
+  { hull: 0x3d4f63, trim: 0x5ab0ff, sail: 0xd6ecff },
+  { hull: 0x4f3a2a, trim: 0x55c060, sail: 0xe8f0c8 },
+  { hull: 0x5a2f4a, trim: 0xd070ff, sail: 0xf2dcf0 },
+];
+const PLAYER_CSS = ['#ffd34d', '#5ab0ff', '#6fe07a', '#d98aff'];
+const ENEMY_COLORS = [
+  { hull: 0x3a2a1e, trim: 0x8b1a1a, sail: 0xa33a2c, flag: 0xaa0000 },
+  { hull: 0x2b2b33, trim: 0x2a4f9a, sail: 0xdcd3bd, flag: 0x1f3f8a },
+  { hull: 0x4a3020, trim: 0x2f6a2f, sail: 0x3a3a3a, flag: 0x111111 },
+  { hull: 0x5a1f1f, trim: 0xcfcfcf, sail: 0xe7c98a, flag: 0x6a1b9a },
+];
+const BOSS_COLORS = { hull: 0x1c1a1a, trim: 0xb8860b, sail: 0x3a0c0c, flag: 0x8b0000 };
+
+// ============================================================
+//  World state
+// ============================================================
+const hud = $('hud');
+let ships = [];               // every ship in the world (players + AI)
+const forts = [];
+const islands = [];
+const profiles = new Map();   // host/solo: player id -> profile
+const netPlayers = new Map(); // guest: player id -> profile mirror from host
+const netShips = new Map();   // guest: ship id -> Ship
+let me = null, menuShip = null, netMe = null;
+let myId = 'host';
+let myName = localStorage.getItem('broadsideName') || 'Captain';
+let gameMode = 'coop';        // 'coop' | 'pvp'
+let gameActive = false, overPending = false;
+let state = 'menu';           // menu | lobby | playing | paused | over
+let shopOpen = false;
+let time = 0, wave = 0, waveClearT = -1, shake = 0;
+let camYaw = Math.PI, camPitch = 0.32, camDist = 32, camY = 4;
+let mySail = 2 / 3, localSteer = 0;
+let shipSeq = 0;
+const net = { mode: 'solo', peer: null, conns: new Map(), hostConn: null, code: '', snapT: 0, inT: 0, events: [], lobby: [] };
+
+function emit(ev) { if (net.mode === 'host' && net.events.length < 400) net.events.push(ev); }
+function focusPos() { return me ? me.pos : ORIGIN; }
+function isAlive(s) { return s && !s.sinking && !s.dead; }
+
+// ============================================================
+//  Ships
+// ============================================================
+class Ship {
+  constructor(o) {
+    const { kind = 'e', colors, colorIdx = 0, x = 0, z = 0, heading = 0, scale = 1, cannons = 4,
+            maxHp = 100, maxSpeed = 12, reloadTime = 2.6, aimErr = 0.08, turnRate = 0.55, dmg = 9, id } = o;
+    this.id = id || ('s' + (++shipSeq));
+    Object.assign(this, { kind, colorIdx, scale, maxHp, hp: maxHp, maxSpeed, reloadTime, aimErr, turnRate, dmg });
+    this.isPlayer = kind === 'p';
+    const b = buildShip(colors, this.isPlayer);
+    this.mesh = b.group; this.sails = b.sails; this.flag = b.flag; this.ironM = b.ironM;
+    this.mesh.scale.setScalar(scale);
+    this.cannonMeshes = [];
+    this.setCannons(cannons);
+    scene.add(this.mesh);
+    this.pos = new THREE.Vector3(x, 0, z);
+    this.heading = heading;
+    this.speed = 0;
+    this.sail = 2 / 3;
+    this.sailVis = this.sail;
+    this.steer = 0;
+    this.reload = { port: 0, star: 0 };
+    this.pitch = 0; this.roll = 0; this.rollKick = 0; this.rollKickV = 0;
+    this.sinking = false; this.sinkT = 0; this.dead = false;
+    this.fxT = 0; this.wakeT = 0; this.bumpCd = 0;
+    this.prefRange = rand(45, 70);
+    this.remote = false; this.net = null; this.profile = null; this.lastHitBy = null;
+    this.pid = ''; this.name = ''; this.tag = null;
+  }
+  setCannons(n) {
+    for (const m of this.cannonMeshes) this.mesh.remove(m);
+    this.cannonMeshes = [];
+    this.cannonCount = n;
+    this.cannonZ = CANNON_SETS[n] || CANNON_SETS[4];
+    for (const cz of this.cannonZ) for (const sx of [2.45, -2.45]) {
+      const m = new THREE.Mesh(CANNON_GEO, this.ironM);
+      m.position.set(sx, 1.05, cz); m.castShadow = true;
+      this.mesh.add(m); this.cannonMeshes.push(m);
+    }
+  }
+  applyStats(prof) {
+    const u = prof.up;
+    const newMax = 100 + 25 * u.armor, gain = newMax - this.maxHp;
+    this.maxHp = newMax;
+    if (gain > 0) this.hp += gain;
+    this.dmg = 10 * (1 + 0.2 * u.guns);
+    this.reloadTime = 2.4 * Math.pow(0.88, u.reload);
+    this.maxSpeed = 15 * (1 + 0.1 * u.sails);
+    this.turnRate = 0.75 * (1 + 0.1 * u.sails);
+    if (this.cannonCount !== 4 + u.cannons) this.setCannons(4 + u.cannons);
+  }
+  forward(v = new THREE.Vector3()) { return v.set(Math.sin(this.heading), 0, Math.cos(this.heading)); }
+  // port = local +X, starboard = local -X
+  sideDir(side, v = new THREE.Vector3()) {
+    const s = side === 'port' ? 1 : -1;
+    return v.set(Math.cos(this.heading) * s, 0, -Math.sin(this.heading) * s);
+  }
+  local(x, y, z) { return new THREE.Vector3(x, y, z).applyMatrix4(this.mesh.matrixWorld); }
+
+  update(dt, t) {
+    if (this.dead) return;
+    this.bumpCd -= dt;
+    const sc = this.scale;
+    if (this.sinking) {
+      this.sinkT += dt;
+      this.speed *= 1 - dt * 0.6;
+      this.pos.addScaledVector(this.forward(), this.speed * dt);
+      this.pos.y -= dt * (0.2 + this.sinkT * 0.22) * sc;
+      this.roll += (this.sinkSide * 0.75 - this.roll) * dt * 0.4;
+      this.pitch += (-0.3 - this.pitch) * dt * 0.3;
+      this.fxT -= dt;
+      if (this.sinkT < 5 && this.fxT <= 0) {
+        this.fxT = 0.09 / sc;
+        fx.fire(this.local(rand(-1.5, 1.5), 2.5, rand(-5, 5)));
+        fx.smoke(this.local(rand(-1.5, 1.5), 3, rand(-5, 5)), true);
+      }
+      if (this.sinkT > 9) this.remove();
+      this.sync(t, dt);
+      return;
+    }
+
+    if (this.remote) {
+      // guest: chase the host's authoritative state (with dead reckoning between snapshots)
+      const n = this.net;
+      if (n) {
+        n.x += Math.sin(n.h) * n.sp * dt; n.z += Math.cos(n.h) * n.sp * dt;
+        if (Math.hypot(n.x - this.pos.x, n.z - this.pos.z) > 40) { this.pos.x = n.x; this.pos.z = n.z; this.heading = n.h; }
+        const k = Math.min(1, dt * 6);
+        this.pos.x += (n.x - this.pos.x) * k; this.pos.z += (n.z - this.pos.z) * k;
+        this.heading += angDiff(n.h, this.heading) * k;
+        this.speed = n.sp;
+      }
+    } else {
+      this.speed += (this.sail * this.maxSpeed - this.speed) * Math.min(1, dt * 0.45);
+      const turnEff = 0.35 + 0.65 * Math.min(1, this.speed / (this.maxSpeed * 0.6));
+      this.heading += this.steer * this.turnRate * turnEff * dt;
+      this.pos.addScaledVector(this.forward(), this.speed * dt);
+      this.reload.port = Math.max(0, this.reload.port - dt);
+      this.reload.star = Math.max(0, this.reload.star - dt);
+    }
+
+    // float on the waves: sample fore/aft and port/starboard
+    const f = this.forward(), px = this.pos.x, pz = this.pos.z;
+    const L = 6 * sc, W = 2.5 * sc;
+    const hC = waveHeight(px, pz, t);
+    const hF = waveHeight(px + f.x * L, pz + f.z * L, t), hB = waveHeight(px - f.x * L, pz - f.z * L, t);
+    const hP = waveHeight(px + f.z * W, pz - f.x * W, t), hS = waveHeight(px - f.z * W, pz + f.x * W, t);
+    const k = Math.min(1, dt * 3);
+    this.pos.y += ((hC + hF + hB + hP + hS) / 5 - 0.1 - this.pos.y) * k;
+    this.pitch += (Math.atan2(hB - hF, L * 2) - this.pitch) * k;
+    const lean = -this.steer * (this.speed / this.maxSpeed) * 0.06;
+    this.roll += (Math.atan2(hP - hS, W * 2) + lean - this.roll) * k;
+
+    // broadside recoil spring
+    this.rollKickV += (-this.rollKick * 14 - this.rollKickV * 2.5) * dt;
+    this.rollKick += this.rollKickV * dt;
+
+    // smoke when badly damaged
+    this.fxT -= dt;
+    if (this.hp < this.maxHp * 0.4 && this.fxT <= 0) {
+      this.fxT = this.hp < this.maxHp * 0.2 ? 0.12 : 0.25;
+      fx.smoke(this.local(rand(-1.2, 1.2), 2.2, rand(-4, 4)), true);
+      if (this.hp < this.maxHp * 0.2) fx.fire(this.local(rand(-1, 1), 2, rand(-4, 4)));
+    }
+    // wake
+    this.wakeT -= dt;
+    if (this.speed > 2 && this.wakeT <= 0 && this.pos.distanceTo(focusPos()) < 170) {
+      this.wakeT = 0.07;
+      const sp = this.speed / this.maxSpeed;
+      fx.wake(this.local(1.7, 0.3, -5.6), this.sideDir('port').multiplyScalar(1.5), sp);
+      fx.wake(this.local(-1.7, 0.3, -5.6), this.sideDir('star').multiplyScalar(1.5), sp);
+      if (this.speed > 7) fx.wake(this.local(rand(-1, 1), 0.4, 7), rv(1).setY(rand(1, 3)), sp);
+    }
+    this.sync(t, dt);
+  }
+
+  sync(t, dt) {
+    this.mesh.position.copy(this.pos);
+    this.mesh.rotation.set(this.pitch, this.heading, this.roll + this.rollKick, 'YXZ');
+    this.sailVis += (this.sail - this.sailVis) * Math.min(1, dt * 2);
+    const s = 0.18 + 0.82 * this.sailVis;
+    for (const sl of this.sails) { sl.mesh.scale.y = s; sl.mesh.position.y = sl.top - sl.h * s / 2; }
+    this.flag.rotation.y = Math.PI / 2 + Math.sin(t * 5 + this.pos.x) * 0.25;
+    this.mesh.updateMatrixWorld();
+  }
+
+  fire(side, elev) {
+    if (this.sinking || this.dead || this.reload[side] > 0) return false;
+    this.reload[side] = this.reloadTime;
+    const sgn = side === 'port' ? 1 : -1;
+    const order = [...this.cannonZ].sort(() => Math.random() - 0.5);
+    order.forEach((cz, i) => after(i * 0.11 + rand(0, 0.05), () => this.fireCannon(side, sgn, cz, elev)));
+    this.rollKickV -= 0.35 * sgn / this.scale;
+    return true;
+  }
+
+  fireCannon(side, sgn, cz, elev) {
+    if (this.sinking || this.dead) return;
+    const muzzle = this.local(sgn * 3.15, 1.05, cz);
+    const sd = this.sideDir(side);
+    const dir = new THREE.Vector3(sd.x * Math.cos(elev), Math.sin(elev), sd.z * Math.cos(elev));
+    dir.add(rv(0.018)).normalize();
+    const vel = dir.clone().multiplyScalar(BALL_SPEED).addScaledVector(this.forward(), this.speed);
+    spawnBall(muzzle, vel, this, { dmg: this.dmg });
+    fx.muzzle(muzzle, dir);
+    sfx('cannon', muzzle);
+  }
+
+  damage(amount, attacker) {
+    if (this.sinking || this.dead || this.remote) return;
+    this.hp -= amount;
+    if (attacker) this.lastHitBy = attacker;
+    if (this === me) hurtFx();
+    if (this.hp <= 0) { this.hp = 0; this.startSinking(); }
+  }
+
+  beginSinkFx() {
+    this.sinking = true;
+    this.sinkSide = Math.random() < 0.5 ? -1 : 1;
+    this.sail = 0;
+    fx.explosion(this.local(0, 2, 0), 2 * this.scale);
+    sfx('hit', this.pos);
+    removeTag(this);
+  }
+  startSinking() { this.beginSinkFx(); onShipSunk(this); }
+
+  remove() {
+    this.dead = true;
+    scene.remove(this.mesh);
+    this.mesh.traverse(o => { if (o.material) [].concat(o.material).forEach(m => { if (m.map !== JOLLY_ROGER) m.dispose(); }); });
+    removeTag(this);
+  }
+}
+
+// ============================================================
+//  Islands and forts
+// ============================================================
+class Fort {
+  constructor(isl, idx, R) {
+    this.id = 'f' + idx; this.kind = 'f'; this.isPlayer = false;
+    this.isl = isl; this.x = isl.x; this.z = isl.z; this.R = R;
+    this.maxHp = 220; this.hp = this.maxHp;
+    this.destroyed = false; this.rebuildT = 0;
+    this.reload = rand(1, 3); this.aim = 0; this.fxT = 0; this.tag = null;
+
+    const M = (color) => new THREE.MeshStandardMaterial({ color, roughness: 0.95, flatShading: true });
+    const stone = M(0x9a948a), dark = M(0x6d6860), roof = M(0x8b2e1e), iron = M(0x1d1d1d);
+    const root = new THREE.Group(); root.position.set(this.x, 0, this.z);
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(R, R + 0.6, 5.2, 12), stone);
+    base.position.y = 3.8;
+    root.add(base);
+    const top = new THREE.Group(); root.add(top);
+    for (let i = 0; i < 12; i++) {
+      const a = i / 12 * Math.PI * 2;
+      const c = new THREE.Mesh(new THREE.BoxGeometry(1.3, 1, 0.8), stone);
+      c.position.set(Math.sin(a) * (R - 0.4), 6.9, Math.cos(a) * (R - 0.4)); c.rotation.y = a;
+      top.add(c);
+    }
+    const tower = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2.8, 7, 10), dark); tower.position.y = 9.9; top.add(tower);
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(3.2, 3, 10), roof); cone.position.y = 14.9; top.add(cone);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 3), dark); pole.position.y = 17.6; top.add(pole);
+    const flag = new THREE.Mesh(new THREE.PlaneGeometry(2, 1.2).translate(1, 0, 0), new THREE.MeshStandardMaterial({ color: 0xc01818, side: THREE.DoubleSide }));
+    flag.position.y = 18.4; top.add(flag);
+    const turret = new THREE.Group(); turret.position.y = 6.7; top.add(turret);
+    for (const o of [-0.22, 0, 0.22]) {
+      const gun = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 2.2, 8).rotateX(Math.PI / 2), iron);
+      gun.position.set(Math.sin(o) * (R - 0.2), 0.4, Math.cos(o) * (R - 0.2)); gun.rotation.y = o;
+      turret.add(gun);
+    }
+    root.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    scene.add(root);
+    this.top = top; this.turret = turret; this.flagMesh = flag;
+  }
+  hit(p) {
+    if (this.destroyed || p.y < 0 || p.y > 15) return false;
+    const d = Math.hypot(p.x - this.x, p.z - this.z);
+    return p.y > 7.2 ? d < 3 : d < this.R + 0.6;
+  }
+  setDestroyed(v) {
+    if (v && !this.destroyed) {
+      const c = new THREE.Vector3(this.x, 8, this.z);
+      fx.explosion(c, 3); sfx('hit', c); sfx('thud', c);
+      removeTag(this);
+    }
+    this.destroyed = v;
+  }
+  reset() { this.hp = this.maxHp; this.destroyed = false; this.top.position.y = 0; this.reload = rand(1, 3); removeTag(this); }
+  damage(amount, attacker) {
+    if (this.destroyed || net.mode === 'guest') return;
+    this.hp -= amount;
+    if (this.hp <= 0) {
+      this.hp = 0;
+      this.setDestroyed(true);
+      this.rebuildT = 150;
+      const prof = attacker && attacker.profile;
+      if (prof) { giveGold(prof, 300); notify('Fort destroyed! +300 gold', prof); }
+    }
+  }
+  update(dt, t, host) {
+    const tp = this.top.position;
+    tp.y += clamp((this.destroyed ? -13 : 0) - tp.y, -dt * 5, dt * 4);
+    if (this.destroyed && tp.y > -12) {
+      this.fxT -= dt;
+      if (this.fxT <= 0) {
+        this.fxT = 0.1;
+        const p = new THREE.Vector3(this.x + rand(-this.R, this.R), 7, this.z + rand(-this.R, this.R));
+        fx.smoke(p, true); fx.dust(p);
+      }
+    }
+    this.turret.rotation.y += angDiff(this.aim, this.turret.rotation.y) * Math.min(1, dt * 3);
+    this.flagMesh.rotation.y = Math.sin(t * 4 + this.x) * 0.3;
+    if (!host || !gameActive) return;
+    if (this.destroyed) {
+      this.rebuildT -= dt;
+      if (this.rebuildT <= 0) { this.destroyed = false; this.hp = this.maxHp; }
+      return;
+    }
+    const tgt = nearestPlayerShip(this.x, this.z, 140);
+    if (!tgt) return;
+    this.aim = Math.atan2(tgt.pos.x - this.x, tgt.pos.z - this.z);
+    this.reload -= dt;
+    if (this.reload <= 0 && Math.abs(angDiff(this.aim, this.turret.rotation.y)) < 0.15) {
+      this.reload = 3.2;
+      this.shoot(tgt, 0);
+      after(0.3, () => { if (!this.destroyed && isAlive(tgt)) this.shoot(tgt, 1); });
+    }
+  }
+  shoot(tgt, i) {
+    const a = this.aim + (i - 0.5) * 0.04;
+    const from = new THREE.Vector3(this.x + Math.sin(a) * (this.R + 1), 7.1, this.z + Math.cos(a) * (this.R + 1));
+    const tf = tgt.forward();
+    const tF = Math.hypot(tgt.pos.x - from.x, tgt.pos.z - from.z) / (BALL_SPEED * 0.9);
+    const tx = tgt.pos.x + tf.x * tgt.speed * tF, tz = tgt.pos.z + tf.z * tgt.speed * tF;
+    const d = Math.hypot(tx - from.x, tz - from.z), y = 1 - from.y, v2 = BALL_SPEED * BALL_SPEED;
+    const disc = v2 * v2 - G * (G * d * d + 2 * y * v2);
+    if (disc < 0) return;
+    const th = Math.atan((v2 - Math.sqrt(disc)) / (G * d)) + rand(-0.015, 0.015);
+    const az = Math.atan2(tx - from.x, tz - from.z) + rand(-0.015, 0.015);
+    const vel = new THREE.Vector3(Math.sin(az) * Math.cos(th), Math.sin(th), Math.cos(az) * Math.cos(th)).multiplyScalar(BALL_SPEED);
+    spawnBall(from, vel, this, { dmg: 10 });
+    fx.muzzle(from, vel.clone().normalize());
+    sfx('cannon', from);
+  }
+}
+
+function buildIslands() {
+  const rng = mulberry32(1337);
+  const M = (color) => new THREE.MeshStandardMaterial({ color, roughness: 0.95, flatShading: true });
+  const sandM = M(0xe6cf8f), grassM = M(0x3f8f3a), rockM = M(0x7a7a72), trunkM = M(0x7a5532), leafM = M(0x2f7d2a);
+  for (let n = 0; n < 16; n++) {
+    let x, z, r, tries = 0;
+    do {
+      x = (rng() - 0.5) * 1100; z = (rng() - 0.5) * 1100; r = 10 + rng() * 16; tries++;
+    } while (tries < 50 && (Math.hypot(x, z) < 100 || islands.some(o => Math.hypot(o.x - x, o.z - z) < o.r + r + 70)));
+    const isFort = n % 3 === 1 && Math.hypot(x, z) > 200;
+    const g = new THREE.Group(); g.position.set(x, 0, z);
+    const sand = new THREE.Mesh(new THREE.CylinderGeometry(r * 1.05, r * 1.35, 3, 14), sandM);
+    sand.position.y = -0.4;
+    g.add(sand);
+    let hh = 1;
+    if (isFort) {
+      const plateau = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.9, r * 0.98, 1.2, 14), grassM);
+      plateau.position.y = 1.4;
+      g.add(plateau);
+    } else {
+      hh = r * (0.5 + rng() * 0.6);
+      const hillGeo = new THREE.ConeGeometry(r * 0.82, hh, 10, 3);
+      const hp = hillGeo.attributes.position;
+      for (let i = 0; i < hp.count; i++) if (hp.getY(i) < hh / 2 - 0.01) { hp.setX(i, hp.getX(i) * (0.85 + rng() * 0.3)); hp.setZ(i, hp.getZ(i) * (0.85 + rng() * 0.3)); }
+      hillGeo.computeVertexNormals();
+      const hill = new THREE.Mesh(hillGeo, grassM); hill.position.y = 1 + hh / 2;
+      g.add(hill);
+    }
+    for (let i = 0; i < 4; i++) {
+      const a = rng() * Math.PI * 2, rs = r * (0.2 + rng() * 0.2);
+      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(rs, 0), rockM);
+      rock.position.set(Math.sin(a) * r * 1.0, 0.5, Math.cos(a) * r * 1.0);
+      rock.rotation.set(rng() * 3, rng() * 3, rng() * 3);
+      g.add(rock);
+    }
+    const palms = 2 + Math.floor(rng() * 3);
+    for (let i = 0; i < palms; i++) {
+      const a = rng() * Math.PI * 2;
+      const palm = new THREE.Group();
+      palm.position.set(Math.sin(a) * r * 0.85, 1, Math.cos(a) * r * 0.85);
+      palm.rotation.set((rng() - 0.5) * 0.4, rng() * 6, (rng() - 0.5) * 0.4);
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.4, 7, 6), trunkM); trunk.position.y = 3.5;
+      palm.add(trunk);
+      for (let k = 0; k < 6; k++) {
+        const la = k / 6 * Math.PI * 2;
+        const leaf = new THREE.Mesh(new THREE.BoxGeometry(1, 0.1, 3.8), leafM);
+        leaf.position.set(Math.sin(la) * 1.6, 7, Math.cos(la) * 1.6);
+        leaf.rotation.set(0.45, la, 0, 'YXZ');
+        palm.add(leaf);
+      }
+      g.add(palm);
+    }
+    g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    scene.add(g);
+    const isl = { x, z, r: r * 1.2, h: isFort ? 2 : hh + 1 };
+    islands.push(isl);
+    if (isFort) forts.push(new Fort(isl, forts.length, clamp(r * 0.55, 5.5, 9)));
+  }
+}
+buildIslands();
+
+// ============================================================
+//  Particles / effects
+// ============================================================
+const particles = [];
+const P_GEO = new THREE.IcosahedronGeometry(1, 0);
+const BOX_GEO = new THREE.BoxGeometry(1, 0.4, 0.4);
+function P({ pos, vel = new THREE.Vector3(), color, size = 0.5, life = 1, grow = 0, gravity = 0, drag = 0, opacity = 1, basic = false, box = false }) {
+  if (particles.length > 900) return;
+  const mat = basic
+    ? new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false })
+    : new THREE.MeshLambertMaterial({ color, transparent: true, opacity, depthWrite: false });
+  const m = new THREE.Mesh(box ? BOX_GEO : P_GEO, mat);
+  m.position.copy(pos);
+  m.rotation.set(rand(0, 6), rand(0, 6), rand(0, 6));
+  m.scale.setScalar(size);
+  scene.add(m);
+  particles.push({ m, vel: vel.clone(), life, max: life, grow, gravity, drag, opacity, size, spin: box ? rand(-8, 8) : 0 });
+}
+function updateParticles(dt) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.life -= dt;
+    if (p.life <= 0) {
+      scene.remove(p.m); p.m.material.dispose();
+      particles[i] = particles[particles.length - 1]; particles.pop();
+      continue;
+    }
+    p.vel.y -= p.gravity * dt;
+    if (p.drag) p.vel.multiplyScalar(Math.max(0, 1 - p.drag * dt));
+    p.m.position.addScaledVector(p.vel, dt);
+    p.size += p.grow * dt;
+    p.m.scale.setScalar(Math.max(0.01, p.size));
+    if (p.spin) { p.m.rotation.x += p.spin * dt; p.m.rotation.y += p.spin * dt * 0.7; }
+    p.m.material.opacity = p.opacity * Math.min(1, (p.life / p.max) * 1.6);
+  }
+}
+const fx = {
+  muzzle(pos, dir) {
+    for (let i = 0; i < 3; i++) P({ pos, vel: dir.clone().multiplyScalar(rand(4, 12)), color: 0xffb040, size: rand(0.5, 0.9), life: 0.14, grow: 5, basic: true });
+    for (let i = 0; i < 7; i++) P({ pos, vel: dir.clone().multiplyScalar(rand(2, 10)).add(rv(1.2)).addScaledVector(UP, 1), color: 0xdedede, size: rand(0.5, 0.9), life: rand(1.3, 2.4), grow: 1.7, drag: 1.6, opacity: 0.8 });
+  },
+  splash(pos) {
+    for (let i = 0; i < 14; i++) P({ pos, vel: new THREE.Vector3(rand(-2.5, 2.5), rand(5, 13), rand(-2.5, 2.5)), color: 0xffffff, size: rand(0.25, 0.55), life: rand(0.8, 1.1), gravity: 26, opacity: 0.95, basic: true });
+    for (let i = 0; i < 4; i++) P({ pos, vel: rv(1.5).setY(0.2), color: 0xe8f6ff, size: 0.6, life: 1.2, grow: 1.8, opacity: 0.6, basic: true });
+  },
+  explosion(pos, scale = 1) {
+    for (let i = 0; i < 10 * scale; i++) P({ pos, vel: rv(5 * scale).addScaledVector(UP, 3), color: Math.random() < 0.5 ? 0xffa020 : 0xffe060, size: rand(0.5, 1.1) * scale, life: rand(0.3, 0.6), grow: 3, drag: 3, basic: true });
+    for (let i = 0; i < 7 * scale; i++) P({ pos, vel: rv(2).addScaledVector(UP, rand(2, 5)), color: 0x3a3a3a, size: rand(0.8, 1.4) * scale, life: rand(1.5, 2.6), grow: 1.5, drag: 1, opacity: 0.8 });
+    for (let i = 0; i < 9 * scale; i++) P({ pos, vel: rv(7).addScaledVector(UP, rand(5, 10)), color: 0x6b4a2b, size: rand(0.4, 0.9), life: 1.6, gravity: 22, box: true });
+  },
+  dust(pos) {
+    for (let i = 0; i < 8; i++) P({ pos, vel: rv(3).addScaledVector(UP, 3), color: 0xcdb98a, size: rand(0.5, 1), life: 1.2, grow: 1.5, drag: 2, opacity: 0.8 });
+  },
+  smoke(pos, dark) {
+    P({ pos, vel: rv(0.6).addScaledVector(UP, rand(2.5, 4.5)), color: dark ? 0x2e2e2e : 0xcccccc, size: rand(0.6, 1), life: rand(1.8, 2.8), grow: 1.4, drag: 0.4, opacity: 0.7 });
+  },
+  fire(pos) {
+    P({ pos, vel: rv(0.6).addScaledVector(UP, rand(2, 4)), color: Math.random() < 0.5 ? 0xff7a10 : 0xffc040, size: rand(0.4, 0.8), life: rand(0.3, 0.6), grow: -0.6, basic: true });
+  },
+  trail(pos) { P({ pos, color: 0xbbbbbb, size: 0.22, life: 0.45, grow: 0.8, opacity: 0.5 }); },
+  wake(pos, vel, sp) { P({ pos, vel, color: 0xf2fbff, size: 0.35 + sp * 0.4, life: 1.8, grow: 1.1, drag: 1, opacity: 0.55, basic: true }); },
+};
+function fxHit(p, sc = 1) {
+  fx.explosion(p.clone(), sc);
+  sfx('hit', p);
+  emit(['x', r2(p.x), r2(p.y), r2(p.z), sc]);
+}
+
+// ============================================================
+//  Cannonballs (and boss mortar shells)
+// ============================================================
+const balls = [];
+const BALL_GEO = new THREE.SphereGeometry(0.3, 8, 6);
+const BALL_MAT = new THREE.MeshStandardMaterial({ color: 0x151515, metalness: 0.6, roughness: 0.4 });
+function spawnBall(pos, vel, owner, opts = {}) {
+  const m = new THREE.Mesh(BALL_GEO, BALL_MAT);
+  m.position.copy(pos);
+  m.castShadow = true;
+  if (opts.aoe) m.scale.setScalar(1.8);
+  scene.add(m);
+  balls.push({ m, vel, owner, life: 0, trailT: 0, dmg: opts.dmg || 10, aoe: opts.aoe || 0 });
+  emit(['b', r2(pos.x), r2(pos.y), r2(pos.z), r2(vel.x), r2(vel.y), r2(vel.z), owner ? owner.id : '', opts.aoe || 0]);
+}
+function removeBall(i) { scene.remove(balls[i].m); balls[i] = balls[balls.length - 1]; balls.pop(); }
+function hitShip(s, p) {
+  const sc = s.scale;
+  const dx = p.x - s.pos.x, dz = p.z - s.pos.z;
+  if (dx * dx + dz * dz > 100 * sc * sc) return false;
+  const ly = (p.y - s.pos.y) / sc;
+  if (ly < -1.3 || ly > 3.4) return false;
+  const c = Math.cos(s.heading), n = Math.sin(s.heading);
+  const lx = (dx * c - dz * n) / sc, lz = (dx * n + dz * c) / sc;
+  if (lz < -6.4 || lz > 7.6) return false;
+  const halfW = lz > 1 ? 2.3 * Math.max(0.15, 1 - (lz - 1) / 6.6) : 2.3;
+  return Math.abs(lx) < halfW + 0.35;
+}
+function canHit(owner, t) {
+  if (!owner || t === owner || t.dead || t.sinking || t === menuShip) return false;
+  const op = owner.kind === 'p', tp = t.kind === 'p';
+  if (op && tp) return gameMode === 'pvp';
+  return op || tp;
+}
+function updateBalls(dt, t, host) {
+  for (let i = balls.length - 1; i >= 0; i--) {
+    const b = balls[i];
+    b.vel.y -= G * dt;
+    b.m.position.addScaledVector(b.vel, dt);
+    b.life += dt;
+    b.trailT -= dt;
+    if (b.trailT <= 0) { b.trailT = 0.04; fx.trail(b.m.position); }
+    const p = b.m.position;
+    let done = false;
+    if (host && !b.aoe) {
+      for (const s of ships) {
+        if (canHit(b.owner, s) && hitShip(s, p)) {
+          s.damage(b.dmg, b.owner);
+          fxHit(p, 1);
+          if (b.owner.profile) notify('Direct hit!', b.owner.profile);
+          done = true; break;
+        }
+      }
+      if (!done && b.owner && b.owner.kind === 'p') {
+        for (const f of forts) if (f.hit(p)) {
+          f.damage(b.dmg, b.owner);
+          fxHit(p, 1);
+          if (b.owner.profile) notify('Fort hit!', b.owner.profile);
+          done = true; break;
+        }
+      }
+    }
+    if (!done) {
+      for (const isl of islands) {
+        if (b.owner && b.owner.isl === isl) continue;
+        const d = Math.hypot(p.x - isl.x, p.z - isl.z);
+        if (d < isl.r && p.y < isl.h * (1 - d / isl.r) + 1.5) { fx.dust(p.clone()); sfx('thud', p); done = true; break; }
+      }
+    }
+    if (!done && p.y < waveHeight(p.x, p.z, t)) {
+      if (b.aoe) {
+        fx.explosion(p.clone(), 1.3); fx.splash(p.clone()); sfx('hit', p);
+        if (host) for (const s of ships) {
+          if (canHit(b.owner, s) && Math.hypot(s.pos.x - p.x, s.pos.z - p.z) < b.aoe + 3 * s.scale) s.damage(b.dmg, b.owner);
+        }
+      } else { fx.splash(p.clone()); sfx('splash', p); }
+      done = true;
+    }
+    if (done || b.life > 8) removeBall(i);
+  }
+}
+
+// ============================================================
+//  Mortar warning rings
+// ============================================================
+const warnings = [];
+const WARN_GEO = new THREE.RingGeometry(5.5, 7, 32).rotateX(-Math.PI / 2);
+function warnAt(x, z, dur) {
+  const m = new THREE.Mesh(WARN_GEO, new THREE.MeshBasicMaterial({ color: 0xff3020, transparent: true, opacity: 0.8, fog: false, depthWrite: false }));
+  scene.add(m);
+  warnings.push({ m, x, z, life: dur, max: dur });
+  emit(['w', r2(x), r2(z), dur]);
+}
+function updateWarnings(dt, t) {
+  for (let i = warnings.length - 1; i >= 0; i--) {
+    const w = warnings[i];
+    w.life -= dt;
+    if (w.life <= 0) { scene.remove(w.m); w.m.material.dispose(); warnings.splice(i, 1); continue; }
+    w.m.position.set(w.x, waveHeight(w.x, w.z, t) + 0.35, w.z);
+    w.m.scale.setScalar(1 + 0.6 * (w.life / w.max));
+    w.m.material.opacity = 0.45 + 0.4 * Math.abs(Math.sin(t * 10));
+  }
+}
+
+// ============================================================
+//  Floating repair barrels
+// ============================================================
+const crates = [];
+let crateSeq = 0;
+const BARREL_GEO = new THREE.CylinderGeometry(0.7, 0.7, 1.6, 10).rotateX(Math.PI / 2);
+const BARREL_MAT = new THREE.MeshStandardMaterial({ color: 0x8a5a2b, roughness: 0.9, flatShading: true, emissive: 0x3a2000 });
+function addCrate(id, x, z) {
+  const m = new THREE.Mesh(BARREL_GEO, BARREL_MAT);
+  m.castShadow = true;
+  scene.add(m);
+  crates.push({ id, m, x, z, life: 45, seed: rand(0, 10) });
+}
+function spawnCrates(pos, n = 2, spread = 4) {
+  for (let i = 0; i < n; i++) addCrate('c' + (++crateSeq), pos.x + rand(-spread, spread), pos.z + rand(-spread, spread));
+}
+function updateCrates(dt, t, host) {
+  for (let i = crates.length - 1; i >= 0; i--) {
+    const c = crates[i];
+    c.m.position.set(c.x, waveHeight(c.x, c.z, t) + 0.1, c.z);
+    c.m.rotation.set(Math.sin(t + c.seed) * 0.3, t * 0.4 + c.seed, Math.cos(t * 1.3 + c.seed) * 0.3);
+    if (!host) continue;
+    c.life -= dt;
+    let take = false;
+    for (const prof of profiles.values()) {
+      const s = prof.ship;
+      if (isAlive(s) && Math.hypot(c.x - s.pos.x, c.z - s.pos.z) < 7) {
+        s.hp = Math.min(s.maxHp, s.hp + 15);
+        notify('+15 hull repaired', prof);
+        sfxFor('pickup', prof);
+        take = true; break;
+      }
+    }
+    if (take || c.life <= 0) { scene.remove(c.m); crates.splice(i, 1); }
+  }
+}
+
+// ============================================================
+//  Collisions (host only)
+// ============================================================
+function collisions() {
+  const live = ships.filter(isAlive);
+  for (let i = 0; i < live.length; i++) for (let j = i + 1; j < live.length; j++) {
+    const a = live[i], b = live[j];
+    const dx = b.pos.x - a.pos.x, dz = b.pos.z - a.pos.z, d = Math.hypot(dx, dz), R = 4.5 * (a.scale + b.scale);
+    if (d < R && d > 0.001) {
+      const push = (R - d) / 2, nx = dx / d, nz = dz / d;
+      a.pos.x -= nx * push; a.pos.z -= nz * push; b.pos.x += nx * push; b.pos.z += nz * push;
+      const impact = (a.speed + b.speed) * 0.5;
+      const friendly = a.kind === 'p' && b.kind === 'p' && gameMode !== 'pvp';
+      if (!friendly && impact > 4 && a.bumpCd <= 0 && b.bumpCd <= 0) {
+        a.damage(impact * 0.8 / a.scale, b); b.damage(impact * 0.8 / b.scale, a);
+        a.bumpCd = b.bumpCd = 1.5;
+        fxHit(a.pos.clone().add(b.pos).multiplyScalar(0.5).setY(1.5), 0.6);
+      }
+      a.speed *= 0.97; b.speed *= 0.97;
+    }
+  }
+  for (const s of live) for (const isl of islands) {
+    const dx = s.pos.x - isl.x, dz = s.pos.z - isl.z, d = Math.hypot(dx, dz), R = isl.r + 3 * s.scale;
+    if (d < R) {
+      s.pos.x = isl.x + dx / d * R; s.pos.z = isl.z + dz / d * R;
+      if (s.speed > 5 && s.bumpCd <= 0) { s.damage(s.speed * 0.8, null); s.bumpCd = 1.5; sfx('thud', s.pos); fx.dust(s.local(0, 1, 7)); }
+      s.speed *= 0.9;
+    }
+  }
+}
+
+// ============================================================
+//  Enemy AI (host only)
+// ============================================================
+function nearestPlayerShip(x, z, maxD = Infinity) {
+  let best = null, bd = maxD;
+  for (const s of ships) {
+    if (s.kind !== 'p' || !isAlive(s) || s === menuShip) continue;
+    const d = Math.hypot(s.pos.x - x, s.pos.z - z);
+    if (d < bd) { bd = d; best = s; }
+  }
+  return best;
+}
+
+function updateAI(e, dt) {
+  if (!isAlive(e)) return;
+  const sc = e.scale;
+  const tgt = nearestPlayerShip(e.pos.x, e.pos.z);
+  let desired, dx = 0, dz = 0, dist = Infinity;
+  if (!tgt) { desired = e.heading + 0.4; e.sail = 1 / 3; }
+  else {
+    dx = tgt.pos.x - e.pos.x; dz = tgt.pos.z - e.pos.z; dist = Math.hypot(dx, dz);
+    const toT = Math.atan2(dx, dz);
+    if (dist > e.prefRange + 30) { desired = toT; e.sail = 1; }
+    else if (dist < 26 * sc) { desired = toT + Math.PI; e.sail = 1; }
+    else {
+      // swing broadside-on, adjusting to hold preferred range
+      const a1 = toT + Math.PI / 2, a2 = toT - Math.PI / 2;
+      const useA1 = Math.abs(angDiff(a1, e.heading)) < Math.abs(angDiff(a2, e.heading));
+      const adj = clamp((dist - e.prefRange) / 40, -0.5, 0.5);
+      desired = useA1 ? a1 - adj : a2 + adj;
+      e.sail = 2 / 3;
+    }
+  }
+  // steer around islands
+  for (const isl of islands) {
+    const ix = isl.x - e.pos.x, iz = isl.z - e.pos.z, d = Math.hypot(ix, iz);
+    if (d < isl.r + 35 * sc) {
+      const a = Math.atan2(ix, iz), diff = angDiff(a, e.heading);
+      if (Math.abs(diff) < 1.3) desired = a - Math.sign(diff || 1) * 1.7;
+    }
+  }
+  // keep some distance from other AI ships
+  for (const o of ships) {
+    if (o === e || o.kind === 'p' || o.sinking) continue;
+    const ox = o.pos.x - e.pos.x, oz = o.pos.z - e.pos.z, d = Math.hypot(ox, oz);
+    if (d < 12 * (sc + o.scale)) {
+      const a = Math.atan2(ox, oz), diff = angDiff(a, e.heading);
+      if (Math.abs(diff) < 1.2) desired = a - Math.sign(diff || 1) * 1.4;
+    }
+  }
+  e.steer = clamp(angDiff(desired, e.heading) * 2, -1, 1);
+  if (!tgt) return;
+
+  // broadside when the target is abeam
+  if (dist < 115) {
+    for (const side of ['port', 'star']) {
+      if (e.reload[side] > 0) continue;
+      const sd = e.sideDir(side);
+      if ((dx * sd.x + dz * sd.z) / dist > 0.9) {
+        const tFlight = dist / (BALL_SPEED * 0.85);
+        const pf = tgt.forward();
+        const lx = tgt.pos.x + pf.x * tgt.speed * tFlight - e.pos.x, lz = tgt.pos.z + pf.z * tgt.speed * tFlight - e.pos.z;
+        const d2 = Math.hypot(lx, lz);
+        const elev = 0.5 * Math.asin(clamp(d2 * G / (BALL_SPEED * BALL_SPEED), 0, 1)) - 0.015 + rand(-1, 1) * e.aimErr;
+        e.fire(side, clamp(elev, -0.05, 0.75));
+      }
+    }
+  }
+
+  // boss: telegraphed mortar barrage
+  if (e.kind === 'b') {
+    e.mortarT -= dt;
+    if (e.mortarT <= 0 && dist < 170) {
+      e.mortarT = rand(6, 8);
+      const T = 2.6, tf = tgt.forward();
+      const cx = tgt.pos.x + tf.x * tgt.speed * T * 0.85, cz = tgt.pos.z + tf.z * tgt.speed * T * 0.85;
+      for (let i = 0; i < 5; i++) {
+        const tx = cx + (i ? rand(-13, 13) : 0), tz = cz + (i ? rand(-13, 13) : 0);
+        const delay = i * 0.18;
+        warnAt(tx, tz, T + delay);
+        after(delay, () => {
+          if (!isAlive(e)) return;
+          const from = e.local(0, 4, -2);
+          const vel = new THREE.Vector3((tx - from.x) / T, (0 - from.y + 0.5 * G * T * T) / T, (tz - from.z) / T);
+          spawnBall(from, vel, e, { aoe: 7, dmg: 14 });
+          fx.muzzle(from, vel.clone().normalize());
+          sfx('cannon', from);
+        });
+      }
+    }
+  }
+}
+
+// ============================================================
+//  Audio (synthesized with WebAudio)
+// ============================================================
+let actx = null, master, noiseBuf;
+function initAudio() {
+  if (actx) { actx.resume(); return; }
+  try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch { return; }
+  master = actx.createGain(); master.gain.value = 0.55; master.connect(actx.destination);
+  noiseBuf = actx.createBuffer(1, actx.sampleRate * 2, actx.sampleRate);
+  const d = noiseBuf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  // ambient sea
+  const src = actx.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
+  const f = actx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 450;
+  const g = actx.createGain(); g.gain.value = 0.06;
+  const lfo = actx.createOscillator(); lfo.frequency.value = 0.12;
+  const lg = actx.createGain(); lg.gain.value = 0.04;
+  lfo.connect(lg).connect(g.gain); lfo.start();
+  src.connect(f).connect(g).connect(master); src.start();
+}
+function noiseBurst(vol, dur, type, f0, f1, q = 0.7) {
+  const t = actx.currentTime;
+  const src = actx.createBufferSource(); src.buffer = noiseBuf;
+  const f = actx.createBiquadFilter(); f.type = type; f.Q.value = q;
+  f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  const g = actx.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  src.connect(f).connect(g).connect(master);
+  src.start(t, Math.random()); src.stop(t + dur);
+}
+function tone(vol, dur, f0, f1, type = 'sine') {
+  const t = actx.currentTime;
+  const o = actx.createOscillator(); o.type = type;
+  o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  const g = actx.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(g).connect(master); o.start(t); o.stop(t + dur);
+}
+function sfx(name, pos) {
+  if (!actx || actx.state !== 'running') return;
+  const att = pos ? 1 / (1 + pos.distanceTo(focusPos()) / 35) : 1;
+  if (att < 0.04) return;
+  switch (name) {
+    case 'cannon': noiseBurst(0.9 * att, 1.1, 'lowpass', 1200, 120); tone(0.9 * att, 0.45, 90, 30); break;
+    case 'hit': noiseBurst(0.9 * att, 0.7, 'lowpass', 3000, 200); tone(0.6 * att, 0.3, 140, 40, 'triangle'); break;
+    case 'splash': noiseBurst(0.35 * att, 0.6, 'bandpass', 1800, 500, 0.8); break;
+    case 'thud': noiseBurst(0.5 * att, 0.4, 'lowpass', 800, 100); break;
+    case 'pickup': tone(0.25, 0.15, 660, 880, 'triangle'); setTimeout(() => tone(0.25, 0.25, 880, 1320, 'triangle'), 110); break;
+    case 'coin': tone(0.2, 0.1, 990, 1320, 'square'); setTimeout(() => tone(0.18, 0.2, 1320, 1760, 'square'), 80); break;
+    case 'bell': tone(0.3, 1.2, 880, 870, 'triangle'); tone(0.15, 1.2, 1760, 1740); break;
+    case 'boss': tone(0.5, 2.0, 110, 55, 'sawtooth'); tone(0.4, 2.0, 82, 41, 'square'); break;
+  }
+}
+
+// ============================================================
+//  Messages (local + broadcast to guests)
+// ============================================================
+function showBanner(text, dur = 2.5) {
+  const b = $('banner'); b.textContent = text; b.style.opacity = 1;
+  clearTimeout(showBanner.t); showBanner.t = setTimeout(() => (b.style.opacity = 0), dur * 1000);
+}
+function toast(text) {
+  const b = $('toast'); b.textContent = text; b.style.opacity = 1;
+  clearTimeout(toast.t); toast.t = setTimeout(() => (b.style.opacity = 0), 1400);
+}
+function announce(text, dur = 2.5, prof = null) {
+  if (!prof || prof.id === myId) showBanner(text, dur);
+  if (!prof || prof.id !== myId) emit(['n', text, dur, prof ? prof.id : null]);
+}
+function notify(text, prof = null) {
+  if (!prof || prof.id === myId) toast(text);
+  if (!prof || prof.id !== myId) emit(['t', text, prof ? prof.id : null]);
+}
+function sfxFor(name, prof = null) {
+  if (!prof || prof.id === myId) sfx(name);
+  if (!prof || prof.id !== myId) emit(['s', name, prof ? prof.id : null]);
+}
+function flashDamage() {
+  const d = $('dmg'); d.style.transition = 'none'; d.style.opacity = 1;
+  requestAnimationFrame(() => { d.style.transition = 'opacity .5s'; d.style.opacity = 0; });
+}
+function hurtFx() { shake = Math.min(1.4, shake + 0.45); flashDamage(); }
+
+// ============================================================
+//  Game flow (host / solo authority)
+// ============================================================
+const timers = [];
+function after(t, fn) { timers.push({ t, fn }); }
+function runTimers(dt) {
+  for (let i = timers.length - 1; i >= 0; i--) {
+    timers[i].t -= dt;
+    if (timers[i].t <= 0) { const fn = timers[i].fn; timers.splice(i, 1); fn(); }
+  }
+}
+
+function makeProfile(id, name, colorIdx) {
+  return { id, name, colorIdx, gold: 0, earned: 0, kills: 0, up: { armor: 0, guns: 0, reload: 0, sails: 0, cannons: 0 },
+           ship: null, respawnT: 0, gen: 0, input: { steer: 0, sail: 2 / 3 } };
+}
+function giveGold(prof, amt) { prof.gold += amt; prof.earned += amt; sfxFor('coin', prof); }
+
+function clearEntities() {
+  for (const s of ships) s.remove();
+  ships = [];
+  netShips.clear(); netMe = null; menuShip = null; me = null;
+  for (const b of balls) scene.remove(b.m); balls.length = 0;
+  for (const c of crates) scene.remove(c.m); crates.length = 0;
+  for (const w of warnings) scene.remove(w.m); warnings.length = 0;
+  for (const p of particles) { scene.remove(p.m); p.m.material.dispose(); } particles.length = 0;
+  for (const f of forts) f.reset();
+  for (const p of profiles.values()) p.ship = null;
+  timers.length = 0;
+  wave = 0; waveClearT = -1; overPending = false; gameActive = false; shake = 0;
+  camYaw = Math.PI; camPitch = 0.32;
+  closeShop(true);
+}
+
+function spawnPlayerShip(p, x, z, h = 0) {
+  if (x === undefined) {
+    const mate = [...profiles.values()].map(q => q.ship).find(s => s && isAlive(s) && s.profile !== p);
+    if (gameMode === 'coop' && mate) { x = mate.pos.x + rand(-30, 30); z = mate.pos.z + rand(-30, 30); h = mate.heading; }
+    else { const a = rand(0, Math.PI * 2), d = rand(60, 140); x = Math.sin(a) * d; z = Math.cos(a) * d; h = a + Math.PI; }
+    for (let k = 0; k < 10 && islands.some(o => Math.hypot(o.x - x, o.z - z) < o.r + 15); k++) { x += 25; z += 10; }
+  }
+  p.gen++;
+  const s = new Ship({ kind: 'p', id: `${p.id}#${p.gen}`, colors: PLAYER_COLORS[p.colorIdx % 4], colorIdx: p.colorIdx, x, z, heading: h, turnRate: 0.75 });
+  s.profile = p; s.pid = p.id; s.name = p.name;
+  s.applyStats(p); s.hp = s.maxHp;
+  s.sail = p.input.sail;
+  ships.push(s);
+  p.ship = s; p.respawnT = 0;
+  return s;
+}
+
+function startMatch() {
+  clearEntities();
+  const n = profiles.size;
+  let i = 0;
+  for (const p of profiles.values()) {
+    Object.assign(p, { gold: 0, earned: 0, kills: 0, up: { armor: 0, guns: 0, reload: 0, sails: 0, cannons: 0 }, respawnT: 0, input: { steer: 0, sail: 2 / 3 } });
+    if (gameMode === 'pvp') { const a = i / n * Math.PI * 2; spawnPlayerShip(p, Math.sin(a) * 90, Math.cos(a) * 90, a + Math.PI / 2); }
+    else spawnPlayerShip(p, (i - (n - 1) / 2) * 25, 0, 0);
+    i++;
+  }
+  gameActive = true; state = 'playing'; mySail = 2 / 3;
+  setOverlay('');
+  lockPointer();
+  clock.getDelta();
+  broadcast({ t: 'start', mode: gameMode });
+  if (gameMode === 'coop') { announce('Set sail, Captain!', 2); after(1.5, () => startWave(1)); }
+  else announce('Free-for-all! Sink your rivals for gold!', 3);
+}
+
+function spawnPoint(center, dmin, dmax) {
+  let x, z, tries = 0;
+  do {
+    const a = rand(0, Math.PI * 2), d = rand(dmin, dmax);
+    x = center.x + Math.sin(a) * d; z = center.z + Math.cos(a) * d; tries++;
+  } while (tries < 30 && islands.some(o => Math.hypot(o.x - x, o.z - z) < o.r + 25));
+  return [x, z];
+}
+
+function startWave(n) {
+  wave = n;
+  const alive = ships.filter(s => s.kind === 'p' && isAlive(s));
+  const center = new THREE.Vector3();
+  for (const s of alive) center.add(s.pos);
+  if (alive.length) center.divideScalar(alive.length);
+  const extra = Math.max(0, profiles.size - 1);
+  const isBoss = n % 5 === 0;
+  const k = n / 5;
+  const count = isBoss ? Math.min(k, 3) + extra : Math.min(1 + Math.ceil(n * 0.75), 7) + extra;
+  for (let i = 0; i < count; i++) {
+    const [x, z] = spawnPoint(center, 170, 230);
+    const ci = Math.floor(Math.random() * ENEMY_COLORS.length);
+    const e = new Ship({
+      kind: 'e', colors: ENEMY_COLORS[ci], colorIdx: ci,
+      x, z, heading: Math.atan2(center.x - x, center.z - z),
+      maxHp: 45 + n * 12,
+      maxSpeed: Math.min(13.5, 9.5 + n * 0.5),
+      reloadTime: Math.max(1.9, 3.6 - n * 0.2),
+      aimErr: Math.max(0.025, 0.11 - n * 0.012),
+    });
+    e.speed = e.maxSpeed * 0.5;
+    ships.push(e);
+  }
+  if (isBoss) {
+    const [x, z] = spawnPoint(center, 200, 240);
+    const boss = new Ship({
+      kind: 'b', colors: BOSS_COLORS, x, z, heading: Math.atan2(center.x - x, center.z - z),
+      scale: BOSS_SCALE, cannons: 6, maxHp: 450 + 200 * (k - 1) + 120 * extra, maxSpeed: 9.5,
+      reloadTime: 2.4, aimErr: 0.04, turnRate: 0.4, dmg: 12,
+    });
+    boss.name = BOSS_NAMES[(k - 1) % BOSS_NAMES.length];
+    boss.mortarT = 6; boss.prefRange = rand(65, 85); boss.speed = 5;
+    ships.push(boss);
+    announce(`⚠ BOSS: ${boss.name} ⚠`, 3.5);
+    sfxFor('boss');
+  } else {
+    announce(`Wave ${n} — ${count} ship${count > 1 ? 's' : ''} approach!`);
+    sfxFor('bell');
+  }
+}
+
+function onShipSunk(s) {
+  const killer = s.lastHitBy && s.lastHitBy.profile;
+  if (s.kind === 'p') {
+    const prof = s.profile;
+    if (!prof) return;
+    if (gameMode === 'pvp') {
+      prof.respawnT = 6;
+      if (killer && killer !== prof) {
+        killer.kills++;
+        giveGold(killer, 250);
+        announce(`${killer.name} sank ${prof.name}!`, 2.5);
+      } else announce('Your ship is going down!', 2.5, prof);
+    } else {
+      // co-op: respawn beside a living crewmate; if nobody is left afloat, hostLogic ends the game
+      const mateAlive = [...profiles.values()].some(q => q !== prof && isAlive(q.ship));
+      prof.respawnT = mateAlive ? 12 : 0;
+      announce('Your ship is going down!', 2.5, prof);
+    }
+    return;
+  }
+  // AI ship sunk: killer gets the full bounty, teammates a share
+  const reward = s.kind === 'b' ? 1000 * Math.max(1, wave / 5) : 100 * Math.max(1, wave);
+  for (const p of profiles.values()) {
+    if (p === killer) { giveGold(p, reward); p.kills++; notify(`Enemy sunk! +${reward} gold`, p); }
+    else { const share = Math.round(reward * 0.4); giveGold(p, share); notify(`Crewmate sank a ship! +${share} gold`, p); }
+  }
+  if (s.kind === 'b') { announce(`${s.name} has been sunk!`, 3); spawnCrates(s.pos, 5, 9); }
+  else spawnCrates(s.pos);
+}
+
+function hostLogic(dt) {
+  for (const p of profiles.values()) {
+    if (p.ship && !isAlive(p.ship) && p.respawnT > 0 && !overPending) {
+      p.respawnT -= dt;
+      if (p.respawnT <= 0) { spawnPlayerShip(p); announce('Back at the helm!', 1.5, p); }
+    }
+  }
+  if (gameMode !== 'coop') return;
+  const alive = [...profiles.values()].some(p => isAlive(p.ship));
+  if (!alive && !overPending) { overPending = true; announce('All hands lost!', 3); after(3.5, gameOver); }
+  if (wave > 0 && alive && !ships.some(s => s.kind !== 'p' && !s.sinking && !s.dead)) {
+    if (waveClearT < 0) {
+      waveClearT = 7;
+      announce(`Wave ${wave} cleared!`, 2.5);
+      for (const p of profiles.values()) {
+        if (isAlive(p.ship)) p.ship.hp = Math.min(p.ship.maxHp, p.ship.hp + 20);
+        giveGold(p, 50 * wave);
+      }
+      after(2.6, () => notify(`+${50 * wave} gold bounty — press B to visit the shipwright`));
+    }
+    waveClearT -= dt;
+    if (waveClearT <= 0) { waveClearT = -1; startWave(wave + 1); }
+  }
+}
+
+function gameOver() {
+  const data = { wave, mode: gameMode, players: [...profiles.values()].map(p => [p.name, p.earned, p.kills]) };
+  emit(['over', data]);
+  sendSnapshot();
+  showGameOver(data);
+}
+
+function applyBuy(prof, key) {
+  const u = UPGRADES[key];
+  if (!u) return;
+  const s = prof.ship;
+  const lvl = prof.up[key] || 0;
+  let cost;
+  if (key === 'repair') {
+    if (!isAlive(s) || s.hp >= s.maxHp) return;
+    cost = REPAIR_COST;
+  } else {
+    if (lvl >= u.max) return;
+    cost = u.cost[lvl];
+  }
+  if (prof.gold < cost) return;
+  prof.gold -= cost;
+  if (key === 'repair') s.hp = s.maxHp;
+  else { prof.up[key] = lvl + 1; if (s && !s.dead) s.applyStats(prof); }
+  notify(`${u.name}${key === 'repair' ? '' : ' — level ' + (lvl + 1)}!`, prof);
+  sfxFor('pickup', prof);
+}
+
+// ============================================================
+//  Networking (PeerJS / WebRTC, host-authoritative)
+// ============================================================
+function genCode() { const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s = ''; for (let i = 0; i < 5; i++) s += A[Math.floor(Math.random() * A.length)]; return s; }
+function broadcast(msg) { for (const c of net.conns.values()) if (c.open) { try { c.send(msg); } catch {} } }
+function leaveNet() {
+  const peer = net.peer;
+  net.mode = 'solo'; net.peer = null; net.hostConn = null; net.conns.clear(); net.events = [];
+  if (peer) try { peer.destroy(); } catch {}
+}
+function lobbyInfo() { return { t: 'lobby', mode: gameMode, players: [...profiles.values()].map(p => [p.name, p.colorIdx]) }; }
+function broadcastLobby() { broadcast(lobbyInfo()); }
+
+function startHost() {
+  if (!window.Peer) { showMainMenu('Online play needs the PeerJS library — check your internet connection.'); return; }
+  leaveNet();
+  clearEntities(); profiles.clear();
+  net.mode = 'host'; myId = 'host'; state = 'lobby';
+  profiles.set(myId, makeProfile(myId, myName, 0));
+  net.code = genCode();
+  renderHostLobby('Opening a room…');
+  const peer = new Peer(PEER_PREFIX + net.code, { debug: 0 });
+  net.peer = peer;
+  peer.on('open', () => { if (state === 'lobby') renderHostLobby(); });
+  peer.on('connection', (conn) => {
+    conn.on('data', (m) => onGuestMsg(conn, m));
+    conn.on('close', () => onGuestLeft(conn));
+    conn.on('error', () => onGuestLeft(conn));
+  });
+  peer.on('disconnected', () => { try { if (net.peer === peer) peer.reconnect(); } catch {} });
+  peer.on('error', (err) => {
+    if (net.peer !== peer) return;
+    if (err.type === 'unavailable-id') startHost();
+    else if (state === 'lobby') renderHostLobby('Network error: ' + err.type);
+  });
+}
+
+function onGuestMsg(conn, m) {
+  if (net.mode !== 'host' || !m || typeof m !== 'object') return;
+  const prof = profiles.get(conn.peer);
+  switch (m.t) {
+    case 'join': {
+      if (prof) return;
+      if (profiles.size >= MAX_PLAYERS) { conn.send({ t: 'full' }); setTimeout(() => conn.close(), 300); return; }
+      const used = new Set([...profiles.values()].map(p => p.colorIdx));
+      let ci = 0; while (used.has(ci)) ci++;
+      const name = String(m.name || 'Pirate').slice(0, 16) || 'Pirate';
+      const p = makeProfile(conn.peer, name, ci);
+      profiles.set(conn.peer, p);
+      net.conns.set(conn.peer, conn);
+      conn.send({ t: 'welcome', id: conn.peer });
+      broadcastLobby();
+      if (state === 'lobby') renderHostLobby();
+      if (gameActive) {
+        conn.send({ t: 'start', mode: gameMode });
+        spawnPlayerShip(p);
+        announce(`${name} has joined the battle!`, 2);
+      }
+      break;
+    }
+    case 'in':
+      if (prof) { prof.input.steer = clamp(+m.s || 0, -1, 1); prof.input.sail = clamp(+m.l || 0, 0, 1); }
+      break;
+    case 'fire':
+      if (prof && gameActive && isAlive(prof.ship)) prof.ship.fire(m.side === 'port' ? 'port' : 'star', clamp(+m.e || 0, 0, 0.44));
+      break;
+    case 'buy':
+      if (prof && gameActive) applyBuy(prof, String(m.k));
+      break;
+  }
+}
+
+function onGuestLeft(conn) {
+  const p = profiles.get(conn.peer);
+  net.conns.delete(conn.peer);
+  if (!p || net.mode !== 'host') return;
+  profiles.delete(conn.peer);
+  if (p.ship && !p.ship.dead) p.ship.remove();
+  announce(`${p.name} has left`, 2);
+  broadcastLobby();
+  if (state === 'lobby') renderHostLobby();
+}
+
+function buildSnapshot() {
+  return {
+    t: 'snap', w: wave, m: gameMode,
+    s: ships.filter(s => !s.dead && s !== menuShip).map(s => [
+      s.id, s.kind, r2(s.pos.x), r2(s.pos.z), r2(s.heading), r2(s.speed), r2(s.sail),
+      Math.ceil(s.hp), s.maxHp, s.sinking ? 1 : 0, s.colorIdx, s.cannonCount,
+      r2(s.reload.port), r2(s.reload.star), r2(s.reloadTime), s.pid, s.name]),
+    f: forts.map(f => [Math.ceil(f.hp), f.destroyed ? 1 : 0, r2(f.aim)]),
+    c: crates.map(c => [c.id, r2(c.x), r2(c.z)]),
+    p: [...profiles.values()].map(p => [p.id, p.name, p.gold, p.earned, p.kills,
+      [p.up.armor, p.up.guns, p.up.reload, p.up.sails, p.up.cannons], r2(p.respawnT), p.colorIdx]),
+    ev: net.events,
+  };
+}
+function sendSnapshot() {
+  if (net.mode === 'host' && net.conns.size) broadcast(buildSnapshot());
+  net.events = [];
+}
+
+// ---------- guest side ----------
+function startJoin(code) {
+  code = String(code || '').trim().toUpperCase();
+  if (!code) { showMainMenu('Enter a room code to join.'); return; }
+  if (!window.Peer) { showMainMenu('Online play needs the PeerJS library — check your internet connection.'); return; }
+  leaveNet();
+  clearEntities(); profiles.clear(); netPlayers.clear();
+  net.mode = 'guest'; state = 'lobby'; myId = null; net.lobby = [];
+  renderGuestLobby(`Connecting to room ${code}…`);
+  const peer = new Peer({ debug: 0 });
+  net.peer = peer;
+  peer.on('open', () => {
+    const conn = peer.connect(PEER_PREFIX + code, { reliable: true });
+    net.hostConn = conn;
+    conn.on('open', () => conn.send({ t: 'join', name: myName }));
+    conn.on('data', onHostMsg);
+    conn.on('close', () => { if (net.hostConn === conn) hostLost('The host closed the game.'); });
+  });
+  peer.on('error', (err) => {
+    if (net.peer !== peer) return;
+    hostLost(err.type === 'peer-unavailable' ? `Room ${code} was not found.` : 'Network error: ' + err.type);
+  });
+}
+
+function hostLost(msg) {
+  if (net.mode !== 'guest') return;
+  leaveNet();
+  if (document.pointerLockElement) document.exitPointerLock();
+  showMainMenu(msg);
+}
+
+function onHostMsg(m) {
+  if (net.mode !== 'guest' || !m) return;
+  switch (m.t) {
+    case 'welcome': myId = m.id; break;
+    case 'full': hostLost('That room is full (4 captains max).'); break;
+    case 'lobby':
+      net.lobby = m.players; gameMode = m.mode;
+      if (state === 'lobby') renderGuestLobby();
+      break;
+    case 'start':
+      clearEntities();
+      gameMode = m.mode; gameActive = true; mySail = 2 / 3;
+      state = 'paused';
+      pausePanel('The battle begins!', '⚓ Take the helm');
+      break;
+    case 'snap':
+      applySnapshot(m);
+      for (const ev of m.ev || []) handleEvent(ev);
+      break;
+  }
+}
+
+function entById(id) { return ships.find(s => s.id === id) || forts.find(f => f.id === id) || null; }
+
+function handleEvent(ev) {
+  switch (ev[0]) {
+    case 'b': {
+      const pos = new THREE.Vector3(ev[1], ev[2], ev[3]), vel = new THREE.Vector3(ev[4], ev[5], ev[6]);
+      spawnBall(pos, vel, entById(ev[7]), { aoe: ev[8] });
+      fx.muzzle(pos, vel.clone().normalize());
+      sfx('cannon', pos);
+      break;
+    }
+    case 'x': {
+      const p = new THREE.Vector3(ev[1], ev[2], ev[3]);
+      let bi = -1, bd = 6;
+      balls.forEach((b, i) => { const d = b.m.position.distanceTo(p); if (d < bd) { bd = d; bi = i; } });
+      if (bi >= 0) removeBall(bi);
+      fx.explosion(p, ev[4]); sfx('hit', p);
+      break;
+    }
+    case 'w': warnAt(ev[1], ev[2], ev[3]); break;
+    case 'n': if (ev[3] == null || ev[3] === myId) showBanner(ev[1], ev[2]); break;
+    case 't': if (ev[2] == null || ev[2] === myId) toast(ev[1]); break;
+    case 's': if (ev[2] == null || ev[2] === myId) sfx(ev[1]); break;
+    case 'over': showGameOver(ev[1]); break;
+  }
+}
+
+function applySnapshot(m) {
+  wave = m.w; gameMode = m.m;
+  const seen = new Set();
+  let mine = null;
+  for (const a of m.s) {
+    const [id, kind, x, z, h, sp, sail, hp, maxHp, sink, ci, cn, rp, rs, rt, pid, name] = a;
+    seen.add(id);
+    let s = netShips.get(id);
+    if (!s) {
+      const colors = kind === 'p' ? PLAYER_COLORS[ci % 4] : kind === 'b' ? BOSS_COLORS : ENEMY_COLORS[ci % ENEMY_COLORS.length];
+      s = new Ship({ kind, id, colors, colorIdx: ci, x, z, heading: h, scale: kind === 'b' ? BOSS_SCALE : 1, cannons: cn, maxHp });
+      s.remote = true; s.pid = pid; s.name = name; s.hp = hp;
+      netShips.set(id, s); ships.push(s);
+    }
+    if (s.dead) continue;
+    s.net = { x, z, h, sp };
+    s.sail = sail; s.maxHp = maxHp;
+    if (pid === myId && hp < s.hp - 0.5) hurtFx();
+    s.hp = hp;
+    s.reload.port = rp; s.reload.star = rs; s.reloadTime = rt;
+    if (cn !== s.cannonCount) s.setCannons(cn);
+    if (sink && !s.sinking) s.beginSinkFx();
+    if (pid === myId && (!mine || (mine.sinking && !s.sinking))) mine = s;
+  }
+  for (const [id, s] of netShips) if (!seen.has(id)) { if (!s.dead) s.remove(); netShips.delete(id); }
+  netMe = mine;
+
+  m.f.forEach(([hp, d, aim], i) => { const f = forts[i]; if (!f) return; f.hp = hp; f.aim = aim; if (d) f.setDestroyed(true); else f.destroyed = false; });
+
+  const ids = new Set(m.c.map(c => c[0]));
+  for (let i = crates.length - 1; i >= 0; i--) if (!ids.has(crates[i].id)) { scene.remove(crates[i].m); crates.splice(i, 1); }
+  for (const [id, x, z] of m.c) if (!crates.some(c => c.id === id)) addCrate(id, x, z);
+
+  netPlayers.clear();
+  for (const [id, name, gold, earned, kills, u, respawnT, ci] of m.p) {
+    netPlayers.set(id, { id, name, gold, earned, kills, respawnT, colorIdx: ci,
+      up: { armor: u[0], guns: u[1], reload: u[2], sails: u[3], cannons: u[4] } });
+  }
+}
+
+function netTick(dt) {
+  if (net.mode === 'host') {
+    net.snapT -= dt;
+    if (net.snapT <= 0) { net.snapT = 0.05; sendSnapshot(); }
+  } else if (net.mode === 'guest' && gameActive && net.hostConn && net.hostConn.open) {
+    net.inT -= dt;
+    if (net.inT <= 0) { net.inT = 0.05; net.hostConn.send({ t: 'in', s: localSteer, l: mySail }); }
+  }
+}
+function sendToHost(msg) { if (net.hostConn && net.hostConn.open) net.hostConn.send(msg); }
+
+// ============================================================
+//  Menus / overlays
+// ============================================================
+const CONTROLS = `
+  <table>
+    <tr><td>W / S</td><td>Raise / lower sails (speed)</td></tr>
+    <tr><td>A / D</td><td>Steer port / starboard</td></tr>
+    <tr><td>Mouse</td><td>Look around &amp; aim (look lower = shoot farther)</td></tr>
+    <tr><td>Click / Space</td><td>Fire the broadside you're facing</td></tr>
+    <tr><td>Q / E</td><td>Fire port / starboard cannons</td></tr>
+    <tr><td>B</td><td>Shipwright — buy upgrades &amp; repairs</td></tr>
+    <tr><td>Wheel</td><td>Zoom camera</td></tr>
+    <tr><td>Esc / P</td><td>Pause / menu</td></tr>
+  </table>`;
+
+function setOverlay(html) {
+  $('panel').innerHTML = html;
+  $('overlay').style.display = html ? 'flex' : 'none';
+  hud.style.display = (state === 'menu' || state === 'lobby') ? 'none' : 'block';
+}
+
+function showMainMenu(msg = '') {
+  leaveNet();
+  state = 'menu';
+  if (document.pointerLockElement) document.exitPointerLock();
+  clearEntities(); profiles.clear(); netPlayers.clear();
+  menuShip = new Ship({ kind: 'p', colors: PLAYER_COLORS[0] });
+  menuShip.sail = 1 / 3;
+  ships.push(menuShip);
+  setOverlay(`<h1>BROADSIDE!</h1><h2>Pirate ship battles on the high seas</h2>
+    ${msg ? `<div class="err">${esc(msg)}</div>` : ''}
+    <div class="row">Captain name: <input id="nameIn" maxlength="16" value="${esc(myName)}"></div>
+    <div class="row"><button data-act="solo">⚓ Solo Voyage</button> <button data-act="host">🏴‍☠️ Host Online Game</button></div>
+    <div class="row"><input id="codeIn" maxlength="5" placeholder="CODE" style="width:140px;text-transform:uppercase;letter-spacing:4px"> <button data-act="join">Join Online Game</button></div>
+    <div style="opacity:.75;font-size:14px">Bosses every 5th wave · Forts guard some islands · Up to 4 captains online (co-op or PvP)</div>
+    <details><summary>Controls</summary>${CONTROLS}</details>`);
+}
+
+function renderHostLobby(status = '') {
+  const list = [...profiles.values()].map(p =>
+    `<li style="color:${PLAYER_CSS[p.colorIdx % 4]}">⚓ ${esc(p.name)}${p.id === myId ? ' (you)' : ''}</li>`).join('');
+  setOverlay(`<h1>Host a Game</h1>
+    ${status ? `<div class="row">${esc(status)}</div>` :
+      `<div>Room code</div><div class="code">${net.code}</div><div style="opacity:.8">Share this code — friends pick “Join Online Game”</div>`}
+    <div class="row">
+      <button class="${gameMode === 'coop' ? '' : 'ghost'}" data-act="mode-coop">Co-op vs Fleet</button>
+      <button class="${gameMode === 'pvp' ? '' : 'ghost'}" data-act="mode-pvp">PvP Free-for-all</button>
+    </div>
+    <div>Crew aboard (${profiles.size}/${MAX_PLAYERS}):</div><ul class="plist">${list}</ul>
+    <div class="row"><button data-act="start">⚔ Start Battle</button> <button class="ghost" data-act="menu">Back</button></div>
+    <div style="opacity:.65;font-size:13px">Keep this tab visible while hosting — the battle runs in your browser.</div>`);
+}
+
+function renderGuestLobby(status = '') {
+  const list = net.lobby.map(([name, ci]) => `<li style="color:${PLAYER_CSS[ci % 4]}">⚓ ${esc(name)}</li>`).join('');
+  setOverlay(`<h1>Joining…</h1>
+    <div class="row">${esc(status || 'Aboard! Waiting for the host to start the battle.')}</div>
+    ${net.lobby.length ? `<div>Mode: <b>${gameMode === 'pvp' ? 'PvP Free-for-all' : 'Co-op vs Fleet'}</b></div><ul class="plist">${list}</ul>` : ''}
+    <div class="row"><button class="ghost" data-act="menu">Leave</button></div>`);
+}
+
+function pausePanel(title = 'Paused', btn = 'Resume') {
+  setOverlay(`<h1>${esc(title)}</h1>
+    ${net.mode !== 'solo' ? '<div class="row" style="opacity:.8">Online battle — the action continues while you are here!</div>' : ''}
+    <div class="row"><button data-act="resume">${esc(btn)}</button> <button class="ghost" data-act="menu">Leave to menu</button></div>
+    ${CONTROLS}`);
+}
+
+function pause() {
+  if (state !== 'playing') return;
+  state = 'paused';
+  if (document.pointerLockElement) document.exitPointerLock();
+  pausePanel();
+}
+function resume() { state = 'playing'; setOverlay(''); lockPointer(); clock.getDelta(); }
+
+function showGameOver(data) {
+  state = 'over'; gameActive = false;
+  closeShop(true);
+  if (document.pointerLockElement) document.exitPointerLock();
+  let best = '';
+  if (net.mode === 'solo') {
+    const mine = data.players[0] ? data.players[0][1] : 0;
+    const b = Math.max(mine, +(localStorage.getItem('broadsideBest') || 0));
+    localStorage.setItem('broadsideBest', b);
+    best = `<div style="opacity:.8">Best voyage: ${b} gold</div>`;
+  }
+  const rows = data.players.map(([n, e, k]) => `<tr><td>${esc(n)}</td><td>${e} gold plundered · ${k} ships sunk</td></tr>`).join('');
+  const buttons = net.mode === 'guest'
+    ? `<div class="row" style="opacity:.8">Waiting for the host to start a new battle…</div><button class="ghost" data-act="menu">Leave</button>`
+    : `<button data-act="again">⚓ Sail Again</button> <button class="ghost" data-act="menu">Main Menu</button>`;
+  setOverlay(`<h1>SUNK!</h1><h2>Davy Jones claims the crew.</h2>
+    <div style="font-size:20px">Waves survived: <b>${Math.max(0, data.wave - 1)}</b></div>
+    <table>${rows}</table>${best}<div class="row">${buttons}</div>`);
+}
+
+function readName() {
+  const el = $('nameIn');
+  if (el) { myName = el.value.trim().slice(0, 16) || 'Captain'; localStorage.setItem('broadsideName', myName); }
+}
+
+function startSolo() {
+  leaveNet();
+  net.mode = 'solo'; myId = 'host'; gameMode = 'coop';
+  profiles.clear();
+  profiles.set(myId, makeProfile(myId, myName, 0));
+  startMatch();
+}
+
+$('overlay').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-act]');
+  if (!btn) return;
+  initAudio();
+  switch (btn.dataset.act) {
+    case 'solo': readName(); startSolo(); break;
+    case 'host': readName(); startHost(); break;
+    case 'join': readName(); startJoin($('codeIn').value); break;
+    case 'mode-coop': gameMode = 'coop'; renderHostLobby(); broadcastLobby(); break;
+    case 'mode-pvp': gameMode = 'pvp'; renderHostLobby(); broadcastLobby(); break;
+    case 'start': if (net.mode === 'host') startMatch(); break;
+    case 'again': if (net.mode !== 'guest') startMatch(); break;
+    case 'resume': resume(); break;
+    case 'menu': showMainMenu(); break;
+  }
+});
+
+// ---------- shipwright shop ----------
+function myProf() { return net.mode === 'guest' ? netPlayers.get(myId) : profiles.get(myId); }
+function openShop() {
+  if (!gameActive || shopOpen) return;
+  shopOpen = true;
+  renderShop.sig = null; renderShop();
+  $('shop').style.display = 'flex';
+  if (document.pointerLockElement) document.exitPointerLock();
+}
+function closeShop(silent = false) {
+  if (!shopOpen) return;
+  shopOpen = false;
+  $('shop').style.display = 'none';
+  if (!silent && state === 'playing') { lockPointer(); clock.getDelta(); }
+}
+function renderShop() {
+  const prof = myProf();
+  if (!prof) return;
+  const sig = JSON.stringify([prof.gold, prof.up, me ? Math.ceil(me.hp) : 0, me ? me.maxHp : 0]);
+  if (sig === renderShop.sig) return;
+  renderShop.sig = sig;
+  let html = `<h2>⚓ The Shipwright</h2><div class="gold">💰 ${prof.gold} gold</div><div class="cards">`;
+  for (const [key, u] of Object.entries(UPGRADES)) {
+    const lvl = prof.up[key] || 0;
+    const maxed = key !== 'repair' && lvl >= u.max;
+    const cost = key === 'repair' ? REPAIR_COST : (maxed ? 0 : u.cost[lvl]);
+    const pips = key === 'repair' ? `<div class="pips">${me ? Math.ceil(me.hp) + ' / ' + me.maxHp : ''}</div>` : `<div class="pips">${'●'.repeat(lvl)}${'○'.repeat(u.max - lvl)}</div>`;
+    const can = !maxed && prof.gold >= cost && (key !== 'repair' || (isAlive(me) && me.hp < me.maxHp));
+    html += `<div class="card"><div class="cn">${u.icon} ${u.name}</div><div class="cd">${u.desc}</div>${pips}
+      <button data-buy="${key}" ${can ? '' : 'disabled'}>${maxed ? 'MAXED' : cost + ' gold'}</button></div>`;
+  }
+  html += `</div><button class="ghost" data-close="1">Back to sea (B)</button>
+    ${net.mode === 'solo' ? '<div style="opacity:.7;font-size:13px;margin-top:6px">Time is paused while you shop.</div>' : '<div style="opacity:.7;font-size:13px;margin-top:6px">Careful — the battle continues while you shop!</div>'}`;
+  $('shopBox').innerHTML = html;
+}
+$('shop').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-buy]');
+  if (b && !b.disabled) {
+    if (net.mode === 'guest') sendToHost({ t: 'buy', k: b.dataset.buy });
+    else applyBuy(profiles.get(myId), b.dataset.buy);
+    renderShop.sig = null; renderShop();
+    return;
+  }
+  if (e.target.closest('[data-close]')) closeShop();
+});
+
+// ============================================================
+//  Aim preview
+// ============================================================
+function aimSide() { return Math.sin(camYaw) < 0 ? 'port' : 'star'; }
+function aimElevation() { return clamp(0.44 - (camPitch - 0.08) * 0.48, 0, 0.44); }
+
+const TRAJ_N = 90;
+const trajPos = new Float32Array(TRAJ_N * 3);
+const trajGeo = new THREE.BufferGeometry();
+trajGeo.setAttribute('position', new THREE.BufferAttribute(trajPos, 3));
+const trajLine = new THREE.Line(trajGeo, new THREE.LineBasicMaterial({ color: 0xffe28a, transparent: true, opacity: 0.85, fog: false }));
+trajLine.frustumCulled = false;
+const marker = new THREE.Mesh(new THREE.RingGeometry(1.6, 2.4, 28).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffe28a, transparent: true, opacity: 0.8, fog: false }));
+scene.add(trajLine, marker);
+
+function updateAimPreview(t) {
+  const visible = state === 'playing' && !shopOpen && isAlive(me) && me !== menuShip;
+  trajLine.visible = marker.visible = visible;
+  if (!visible) return;
+  const side = aimSide(), elev = aimElevation();
+  const p = me.local(side === 'port' ? 3.15 : -3.15, 1.05, 0);
+  const sd = me.sideDir(side);
+  const v = new THREE.Vector3(sd.x * Math.cos(elev), Math.sin(elev), sd.z * Math.cos(elev))
+    .multiplyScalar(BALL_SPEED).addScaledVector(me.forward(), me.speed);
+  let n = 0;
+  while (n < TRAJ_N) {
+    trajPos[n * 3] = p.x; trajPos[n * 3 + 1] = p.y; trajPos[n * 3 + 2] = p.z; n++;
+    if (p.y < waveHeight(p.x, p.z, t)) break;
+    v.y -= G * 0.05; p.addScaledVector(v, 0.05);
+  }
+  trajGeo.setDrawRange(0, n);
+  trajGeo.attributes.position.needsUpdate = true;
+  marker.position.set(p.x, waveHeight(p.x, p.z, t) + 0.25, p.z);
+  const ready = me.reload[side] <= 0;
+  trajLine.material.color.set(ready ? 0xffe28a : 0x8a8a8a);
+  marker.material.color.set(ready ? 0xffe28a : 0x8a8a8a);
+}
+
+function fireSide(side) {
+  if (!isAlive(me) || me === menuShip) return;
+  const elev = aimElevation();
+  if (net.mode === 'guest') { if (me.reload[side] <= 0) sendToHost({ t: 'fire', side, e: elev }); }
+  else me.fire(side, elev);
+}
+
+// ============================================================
+//  HUD
+// ============================================================
+const TV = new THREE.Vector3();
+function updateTag(ent, wx, wy, wz, label, frac, color) {
+  if (!ent.tag) {
+    const d = document.createElement('div');
+    d.className = 'tag';
+    d.innerHTML = '<div class="nm"></div><div class="ebar"><div></div></div>';
+    hud.appendChild(d);
+    ent.tag = d; d._label = null;
+  }
+  const d = ent.tag;
+  TV.set(wx, wy, wz);
+  const dist = TV.distanceTo(camera.position);
+  TV.project(camera);
+  if (TV.z > 1 || dist > 320) { d.style.display = 'none'; return; }
+  d.style.display = 'block';
+  d.style.left = ((TV.x * 0.5 + 0.5) * innerWidth) + 'px';
+  d.style.top = ((-TV.y * 0.5 + 0.5) * innerHeight) + 'px';
+  if (d._label !== label) { d.firstChild.textContent = label; d._label = label; }
+  const fill = d.lastChild.firstChild;
+  fill.style.width = (clamp(frac, 0, 1) * 100) + '%';
+  fill.style.background = color;
+}
+function removeTag(ent) { if (ent.tag) { ent.tag.remove(); ent.tag = null; } }
+
+const mm = $('minimap').getContext('2d');
+function updateHUD() {
+  const prof = myProf();
+  const hp = isAlive(me) ? me.hp / me.maxHp : 0;
+  const fill = $('hpFill');
+  fill.style.width = (hp * 100) + '%';
+  fill.style.background = hp > 0.5 ? 'linear-gradient(#7fe07a,#2f9a3a)' : hp > 0.25 ? 'linear-gradient(#ffd56a,#d18b12)' : 'linear-gradient(#ff7a6a,#b0201a)';
+  $('gold').textContent = `Gold: ${prof ? prof.gold : 0}`;
+  if (gameMode === 'pvp') {
+    $('wave').textContent = `Kills: ${prof ? prof.kills : 0}`;
+    $('foes').textContent = `Rivals: ${ships.filter(s => s.kind === 'p' && isAlive(s) && s !== me).length}`;
+  } else {
+    $('wave').textContent = `Wave ${wave}`;
+    $('foes').textContent = `Foes: ${ships.filter(s => s.kind !== 'p' && isAlive(s)).length}`;
+  }
+  const lvl = Math.round(mySail * 3);
+  $('sails').textContent = 'SAILS ' + '▮'.repeat(lvl) + '▯'.repeat(3 - lvl);
+  $('speed').textContent = `${((me ? me.speed : 0) * 1.2).toFixed(1)} knots`;
+  const side = aimSide();
+  for (const [id, s] of [['rPort', 'port'], ['rStar', 'star']]) {
+    const el = $(id);
+    el.classList.toggle('aim', side === s);
+    el.querySelector('.bar > div').style.width = (me ? (1 - me.reload[s] / me.reloadTime) * 100 : 0) + '%';
+  }
+  // respawn countdown
+  const rs = $('respawn');
+  if (prof && prof.respawnT > 0 && !isAlive(me) && gameActive) rs.textContent = `Respawning in ${Math.ceil(prof.respawnT)}…`;
+  else rs.textContent = '';
+
+  // floating tags
+  let boss = null;
+  for (const s of ships) {
+    if (s === me || !isAlive(s)) { removeTag(s); continue; }
+    if (s.kind === 'b') boss = s;
+    const frac = s.hp / s.maxHp;
+    if (s.kind === 'p') updateTag(s, s.pos.x, s.pos.y + 17, s.pos.z, s.name, frac, gameMode === 'pvp' ? '#e2412f' : PLAYER_CSS[s.colorIdx % 4]);
+    else updateTag(s, s.pos.x, s.pos.y + 17 * s.scale, s.pos.z, s.kind === 'b' ? s.name : '', frac, '#e2412f');
+  }
+  for (const f of forts) {
+    if (f.destroyed || !gameActive) removeTag(f);
+    else updateTag(f, f.x, 21, f.z, 'Fort', f.hp / f.maxHp, '#ff9a30');
+  }
+  // boss bar
+  const bb = $('bossbar');
+  if (boss) { bb.style.display = 'block'; $('bossName').textContent = '☠ ' + boss.name + ' ☠'; $('bossFill').style.width = (boss.hp / boss.maxHp * 100) + '%'; }
+  else bb.style.display = 'none';
+  // scoreboard (online)
+  const sb = $('scoreboard');
+  if (net.mode !== 'solo') {
+    const list = net.mode === 'guest' ? [...netPlayers.values()] : [...profiles.values()];
+    list.sort((a, b) => gameMode === 'pvp' ? b.kills - a.kills : b.earned - a.earned);
+    sb.style.display = 'block';
+    sb.innerHTML = list.map(p => `<div style="color:${PLAYER_CSS[p.colorIdx % 4]}"><span>${esc(p.name)}</span><span>${gameMode === 'pvp' ? p.kills + ' ☠ · ' : ''}${p.earned} 💰</span></div>`).join('');
+  } else sb.style.display = 'none';
+
+  // minimap (rotates with the ship, bow is up)
+  const W = 180, R = 90, S = R / 260;
+  const fp = focusPos(), h = me ? me.heading : 0;
+  mm.clearRect(0, 0, W, W);
+  mm.save();
+  mm.beginPath(); mm.arc(R, R, R - 2, 0, Math.PI * 2); mm.clip();
+  const toMap = (x, z) => {
+    const dx = x - fp.x, dz = z - fp.z;
+    const fwd = dx * Math.sin(h) + dz * Math.cos(h);
+    const right = -(dx * Math.cos(h) - dz * Math.sin(h));
+    return [R + right * S, R - fwd * S];
+  };
+  mm.fillStyle = '#d9c27a';
+  for (const isl of islands) { const [x, y] = toMap(isl.x, isl.z); mm.beginPath(); mm.arc(x, y, Math.max(2, isl.r * S), 0, Math.PI * 2); mm.fill(); }
+  for (const f of forts) { const [x, y] = toMap(f.x, f.z); mm.fillStyle = f.destroyed ? '#666' : '#ff8a20'; mm.fillRect(x - 4, y - 4, 8, 8); }
+  mm.fillStyle = '#ffd34d';
+  for (const c of crates) { const [x, y] = toMap(c.x, c.z); mm.fillRect(x - 2, y - 2, 4, 4); }
+  for (const s of ships) {
+    if (s === me || s.dead) continue;
+    const [x, y] = toMap(s.pos.x, s.pos.z);
+    mm.fillStyle = s.sinking ? '#555' : s.kind === 'p' ? (gameMode === 'pvp' ? '#ff4a3a' : PLAYER_CSS[s.colorIdx % 4]) : '#ff4a3a';
+    mm.beginPath(); mm.arc(clamp(x, 6, W - 6), clamp(y, 6, W - 6), s.kind === 'b' ? 7 : 4, 0, Math.PI * 2); mm.fill();
+  }
+  mm.strokeStyle = 'rgba(255,255,255,.2)'; mm.beginPath(); mm.arc(R, R, 100 * S, 0, Math.PI * 2); mm.stroke();
+  mm.fillStyle = '#fff';
+  mm.beginPath(); mm.moveTo(R, R - 8); mm.lineTo(R + 5, R + 6); mm.lineTo(R - 5, R + 6); mm.closePath(); mm.fill();
+  mm.restore();
+
+  if (shopOpen) renderShop();
+}
+
+// ============================================================
+//  Input
+// ============================================================
+const canvas = renderer.domElement;
+const keys = {};
+let mouseDown = false;
+addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT') {
+    if (e.code === 'Enter' && e.target.id === 'codeIn') { readName(); startJoin(e.target.value); }
+    return;
+  }
+  keys[e.code] = true;
+  if (e.code === 'KeyB' && gameActive && (state === 'playing' || shopOpen)) { shopOpen ? closeShop() : openShop(); return; }
+  if (e.code === 'Escape' && shopOpen) { closeShop(); return; }
+  if (state !== 'playing' || shopOpen || e.repeat) return;
+  if (e.code === 'KeyW' || e.code === 'ArrowUp') mySail = Math.min(1, Math.round(mySail * 3 + 1) / 3);
+  if (e.code === 'KeyS' || e.code === 'ArrowDown') mySail = Math.max(0, Math.round(mySail * 3 - 1) / 3);
+  if (e.code === 'KeyQ') fireSide('port');
+  if (e.code === 'KeyE') fireSide('star');
+  if (e.code === 'Space') { fireSide(aimSide()); e.preventDefault(); }
+  if (e.code === 'KeyP') pause();
+});
+addEventListener('keyup', (e) => { keys[e.code] = false; });
+canvas.addEventListener('mousedown', (e) => {
+  mouseDown = true;
+  if (state !== 'playing' || shopOpen) return;
+  if (!document.pointerLockElement) { lockPointer(); return; }
+  if (e.button === 0) fireSide(aimSide());
+});
+addEventListener('mouseup', () => { mouseDown = false; });
+addEventListener('mousemove', (e) => {
+  if (state !== 'playing' || shopOpen) return;
+  if (!document.pointerLockElement && !mouseDown) return;
+  camYaw -= e.movementX * 0.0028;
+  camPitch = clamp(camPitch + e.movementY * 0.002, 0.06, 1.2);
+});
+addEventListener('wheel', (e) => { camDist = clamp(camDist + e.deltaY * 0.03, 14, 80); }, { passive: true });
+function lockPointer() {
+  try { const r = canvas.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch {}
+}
+document.addEventListener('pointerlockchange', () => {
+  if (!document.pointerLockElement && state === 'playing' && !shopOpen) pause();
+});
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// ============================================================
+//  Main loop
+// ============================================================
+function getMe() {
+  if (net.mode === 'guest') return netMe;
+  const p = profiles.get(myId);
+  return (p && p.ship) || menuShip || null;
+}
+
+function updateCamera(dt, focus) {
+  const yaw = (me ? me.heading : 0) + camYaw;
+  camY += (focus.y * 0.5 + 4 - camY) * Math.min(1, dt * 3);
+  const target = new THREE.Vector3(focus.x, camY, focus.z);
+  const cp = Math.cos(camPitch);
+  camera.position.set(
+    target.x + Math.sin(yaw) * cp * camDist,
+    target.y + Math.sin(camPitch) * camDist,
+    target.z + Math.cos(yaw) * cp * camDist
+  );
+  camera.position.y = Math.max(camera.position.y, waveHeight(camera.position.x, camera.position.z, time) + 1.5);
+  if (shake > 0) { camera.position.add(rv(shake * 0.6)); shake = Math.max(0, shake - dt * 2.5); }
+  camera.lookAt(target);
+  sky.position.copy(camera.position);
+  sun.position.copy(target).add(SUN_OFFSET);
+  sun.target.position.copy(target);
+}
+
+function step(dt) {
+  time += dt;
+  runTimers(dt);
+  const host = net.mode !== 'guest';
+  me = getMe();
+  const canControl = state === 'playing' && !shopOpen && isAlive(me);
+  localSteer = canControl ? ((keys.KeyA || keys.ArrowLeft) ? 1 : 0) - ((keys.KeyD || keys.ArrowRight) ? 1 : 0) : 0;
+  if (state === 'menu' || state === 'lobby') camYaw += dt * 0.08;
+
+  if (host) {
+    const mp = profiles.get(myId);
+    if (mp) { mp.input.steer = localSteer; mp.input.sail = mySail; }
+    for (const p of profiles.values()) if (isAlive(p.ship)) { p.ship.steer = p.input.steer; p.ship.sail = p.input.sail; }
+    if (gameActive) {
+      for (const s of ships) if (s.kind !== 'p') updateAI(s, dt);
+      hostLogic(dt);
+    }
+  }
+  for (const s of ships) s.update(dt, time);
+  ships = ships.filter(s => !s.dead);
+  for (const f of forts) f.update(dt, time, host);
+  if (host) collisions();
+  updateBalls(dt, time, host);
+  updateWarnings(dt, time);
+  updateParticles(dt);
+  updateCrates(dt, time, host);
+
+  const focus = focusPos();
+  updateOcean(time, focus.x, focus.z);
+  updateCamera(dt, focus);
+  updateAimPreview(time);
+  if (state !== 'menu' && state !== 'lobby') updateHUD();
+  netTick(dt);
+}
+
+const clock = new THREE.Clock();
+showMainMenu();
+renderer.setAnimationLoop(() => {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const frozen = net.mode === 'solo' && (state === 'paused' || shopOpen);
+  if (!frozen) step(dt);
+  renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>
