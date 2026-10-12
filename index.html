@@ -17,6 +17,8 @@
   #stats { margin-top: 8px; font-size: 18px; }
   #objective { margin-top: 8px; font-size: 16px; color: #ffe28a; text-shadow: 0 2px 3px #000; }
   #objective:empty { display: none; }
+  #treasureTxt { margin-top: 4px; font-size: 15px; color: #ffcf80; text-shadow: 0 2px 3px #000; }
+  #treasureTxt:empty { display: none; }
   #hint { margin-top: 6px; font-size: 14px; opacity: .75; }
   #loadout { position: absolute; bottom: 92px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; text-shadow: 0 1px 3px #000; }
   .slot { min-width: 74px; padding: 4px 8px; font-size: 13px; text-align: center; border: 2px solid rgba(201,164,92,.5); border-radius: 8px; background: rgba(20,12,4,.55); }
@@ -125,6 +127,7 @@
     <div class="bar"><div id="hpFill"></div></div>
     <div id="stats"><span id="gold">Gold: 0</span> &nbsp;·&nbsp; <span id="wave">Wave 1</span> &nbsp;·&nbsp; <span id="foes"></span></div>
     <div id="objective"></div>
+    <div id="treasureTxt"></div>
     <div id="hint">[B] Shipwright — spend gold on upgrades</div>
   </div>
   <div id="bossbar"><div id="bossName"></div><div class="bar"><div id="bossFill"></div></div></div>
@@ -1156,6 +1159,7 @@ class Kraken {
     const killer = this.lastHitBy && this.lastHitBy.profile;
     for (const p of profiles.values()) { const r = p === killer ? 3000 : 1500; giveGold(p, r); notify(`🐙 Kraken bounty: +${r} gold`, p); }
     spawnCrates(new THREE.Vector3(this.x, 0, this.z), 5, 10);
+    spawnMap(new THREE.Vector3(this.x, 0, this.z));
   }
 }
 
@@ -1469,6 +1473,12 @@ function drawChart(ctx, W, cx, cz, S, h, rim) {
     if (rim && Math.hypot(x - R, y - R) > R - 6 && teamOf(s) === 'E' && !s.sinking) offscreen.push([x, y, col]);
   }
   // objective and Kraken markers
+  const trc = myTreasure();
+  if (trc) {
+    const [x, y] = toScreen(trc.x, trc.z);
+    ctx.strokeStyle = '#ff2020'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(x - 5, y - 5); ctx.lineTo(x + 5, y + 5); ctx.moveTo(x + 5, y - 5); ctx.lineTo(x - 5, y + 5); ctx.stroke();
+  }
   const om = objective.marker;
   if (om) {
     const [x, y] = toScreen(om[0], om[1]), pulse = 1 + 0.15 * Math.sin(time * 4);
@@ -1600,7 +1610,26 @@ beaconPole.position.y = 20;
 beacon.add(beaconRing, beaconPole);
 beacon.visible = false;
 scene.add(beacon);
+// my treasure: a red X on the beach and a golden light beam
+const treasureX = new THREE.Group();
+{
+  const xm = new THREE.MeshBasicMaterial({ color: 0xd01010 });
+  for (const r of [Math.PI / 4, -Math.PI / 4]) { const b = new THREE.Mesh(new THREE.BoxGeometry(5, 0.3, 0.9), xm); b.rotation.y = r; treasureX.add(b); }
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 1.4, 60, 10, 1, true),
+    new THREE.MeshBasicMaterial({ color: 0xffd040, transparent: true, opacity: 0.35, depthWrite: false, fog: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }));
+  beam.position.y = 30;
+  treasureX.add(beam);
+  treasureX.visible = false;
+  scene.add(treasureX);
+}
+function myTreasure() { const p = myProf(); return p && p.treasure; }
+function updateTreasureMarker(t) {
+  const tr = myTreasure();
+  treasureX.visible = !!tr && gameActive;
+  if (tr) { treasureX.position.set(tr.x, 1.25, tr.z); treasureX.children[2].material.opacity = 0.25 + 0.15 * Math.sin(t * 3); }
+}
 function updateBeacon(t) {
+  updateTreasureMarker(t);
   const m = objective.marker;
   if (!m || (m[2] !== 'harbor' && m[2] !== 'fort')) { beacon.visible = false; return; }
   beacon.visible = true;
@@ -1765,12 +1794,24 @@ const crates = [];
 let crateSeq = 0;
 const BARREL_GEO = new THREE.CylinderGeometry(0.7, 0.7, 1.6, 10).rotateX(Math.PI / 2);
 const BARREL_MAT = new THREE.MeshStandardMaterial({ color: 0x8a5a2b, roughness: 0.9, flatShading: true, emissive: 0x3a2000 });
-function addCrate(id, x, z) {
-  const m = new THREE.Mesh(BARREL_GEO, BARREL_MAT);
+// floating bottle with a rolled-up map inside
+const BOTTLE = (() => {
+  const g = new THREE.Group();
+  const glass = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.5, 1.6, 10).rotateX(Math.PI / 2),
+    new THREE.MeshStandardMaterial({ color: 0x5fb87a, transparent: true, opacity: 0.6, roughness: 0.1, metalness: 0.2 }));
+  const paper = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 1.2, 8).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xf0dcae, emissive: 0x806020, emissiveIntensity: 0.4 }));
+  const cork = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.22, 0.4, 8).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x8a5a2b }));
+  cork.position.z = 0.95;
+  g.add(glass, paper, cork);
+  return g;
+})();
+function addCrate(id, x, z, type = 'repair') {
+  const m = type === 'map' ? BOTTLE.clone() : new THREE.Mesh(BARREL_GEO, BARREL_MAT);
   m.castShadow = true;
   scene.add(m);
-  crates.push({ id, m, x, z, life: 45, seed: rand(0, 10) });
+  crates.push({ id, m, x, z, life: type === 'map' ? 70 : 45, seed: rand(0, 10), type });
 }
+function spawnMap(pos) { addCrate('c' + (++crateSeq), pos.x + rand(-3, 3), pos.z + rand(-3, 3), 'map'); }
 function spawnCrates(pos, n = 2, spread = 4) {
   for (let i = 0; i < n; i++) addCrate('c' + (++crateSeq), pos.x + rand(-spread, spread), pos.z + rand(-spread, spread));
 }
@@ -1813,9 +1854,9 @@ function updateCrates(dt, t, host) {
     let take = false;
     for (const prof of profiles.values()) {
       const s = prof.ship;
-      if (isAlive(s) && Math.hypot(c.x - s.pos.x, c.z - s.pos.z) < 7) {
-        s.hp = Math.min(s.maxHp, s.hp + 15);
-        notify('+15 hull repaired', prof);
+      if (isAlive(s) && Math.hypot(c.x - s.pos.x, c.z - s.pos.z) < 7 * s.scale) {
+        if (c.type === 'map') giveTreasureMap(prof);
+        else { s.hp = Math.min(s.maxHp, s.hp + 15); notify('+15 hull repaired', prof); }
         sfxFor('pickup', prof);
         take = true; break;
       }
@@ -2260,7 +2301,7 @@ function startMatch() {
   const n = profiles.size;
   let i = 0;
   for (const p of profiles.values()) {
-    Object.assign(p, { gold: 0, earned: 0, kills: 0, up: freshUp(), ammo: 'round', cd: { kegs: 0, mortar: 0, boost: 0, special: 0 }, respawnT: 0, input: { steer: 0, sail: 2 / 3 } });
+    Object.assign(p, { treasure: null, gold: 0, earned: 0, kills: 0, up: freshUp(), ammo: 'round', cd: { kegs: 0, mortar: 0, boost: 0, special: 0 }, respawnT: 0, input: { steer: 0, sail: 2 / 3 } });
     if (gameMode === 'pvp') { const a = i / n * Math.PI * 2; spawnPlayerShip(p, Math.sin(a) * 90, Math.cos(a) * 90, a + Math.PI / 2); }
     else spawnPlayerShip(p, (i - (n - 1) / 2) * 25, 0, 0);
     i++;
@@ -2566,6 +2607,7 @@ function onShipSunk(s) {
   }
   if (s.kind === 'b') { announce(`${s.name} has been sunk!`, 3); spawnCrates(s.pos, 5, 9); if (s.isKing) victory(); }
   else spawnCrates(s.pos);
+  if (!s.selfDestruct && Math.random() < (s.kind === 'b' ? 1 : s.colorIdx === 4 ? 0.3 : 0.12)) spawnMap(s.pos);
 }
 
 // ---------- boarding ----------
@@ -2671,6 +2713,7 @@ function hostLogic(dt) {
     for (const k in p.cd) p.cd[k] = Math.max(0, p.cd[k] - dt);
     if (p.ship) p.ship.ammo = p.ammo;
     if (p.board) updateBoarding(p, dt);
+    if (p.treasure) updateDig(p, dt);
     if (p.ship && !isAlive(p.ship) && p.respawnT > 0 && !overPending) {
       p.respawnT -= dt;
       if (p.respawnT <= 0) { spawnPlayerShip(p); announce('Back at the helm!', 1.5, p); }
@@ -2911,12 +2954,13 @@ function buildSnapshot() {
       r2(s.reload.port), r2(s.reload.star), r2(s.reloadTime), s.pid, s.name, s.design ? designArr(s.design) : s.aiType ? ['ai', s.aiType.scale, s.aiType.masts, s.role] : 0,
       (s.burnT > 0 ? 1 : 0) | (s.slowT > 0 ? 2 : 0) | (s.boostT > 0 ? 4 : 0) | (s.repairing ? 8 : 0) | (s.smokeT > 0 ? 16 : 0) | (Math.min(7, s.burnStacks | 0) << 5)]),
     f: forts.map(f => [Math.ceil(f.hp), f.destroyed ? 1 : 0, r2(f.aim), f.maxHp]),
-    c: crates.map(c => [c.id, r2(c.x), r2(c.z)]),
+    c: crates.map(c => [c.id, r2(c.x), r2(c.z), c.type]),
     ob: objective,
     kr: kraken && !kraken.dead ? [r2(kraken.x), r2(kraken.z), kraken.surfaced ? 1 : 0, Math.ceil(kraken.hp), kraken.maxHp, kraken.dying ? 1 : 0,
       kraken.tentacles.map(k => [k.id, r2(k.x), r2(k.z), k.state, r2(k.t), r2(k.yaw), r2(k.slamYaw)])] : 0,
     p: [...profiles.values()].map(p => [p.id, p.name, p.gold, p.earned, p.kills,
-      p.up, r2(p.respawnT), p.colorIdx, p.ammo, p.cd, p.board ? [p.board.phase, r2(p.board.phase === 'fight' ? p.board.t / p.board.dur : p.board.t), p.board.target.name || 'ship', boardLoot(p.board.target)] : 0]),
+      p.up, r2(p.respawnT), p.colorIdx, p.ammo, p.cd, p.board ? [p.board.phase, r2(p.board.phase === 'fight' ? p.board.t / p.board.dur : p.board.t), p.board.target.name || 'ship', boardLoot(p.board.target)] : 0,
+      p.treasure ? [r2(p.treasure.x), r2(p.treasure.z), r2(p.treasure.dig)] : 0]),
     k: kegs.map(k => [k.id, r2(k.x), r2(k.z)]),
     env: [r2(wind.angle), r2(wind.strength), +env.dayT.toFixed(4), env.weather],
     ev: net.events,
@@ -3086,11 +3130,11 @@ function applySnapshot(m) {
   } else if (kraken && !kraken.dying) { kraken.dispose(); kraken = null; }
   const ids = new Set(m.c.map(c => c[0]));
   for (let i = crates.length - 1; i >= 0; i--) if (!ids.has(crates[i].id)) { scene.remove(crates[i].m); crates.splice(i, 1); }
-  for (const [id, x, z] of m.c) if (!crates.some(c => c.id === id)) addCrate(id, x, z);
+  for (const [id, x, z, ty] of m.c) if (!crates.some(c => c.id === id)) addCrate(id, x, z, ty);
 
   netPlayers.clear();
-  for (const [id, name, gold, earned, kills, up, respawnT, ci, ammo, cd, bd] of m.p) {
-    netPlayers.set(id, { id, name, gold, earned, kills, respawnT, colorIdx: ci, up: { ...freshUp(), ...up }, ammo, cd: cd || {}, bd: bd || null, design: id === myId ? myDesign : DEFAULT_DESIGN });
+  for (const [id, name, gold, earned, kills, up, respawnT, ci, ammo, cd, bd, tr] of m.p) {
+    netPlayers.set(id, { id, name, gold, earned, kills, respawnT, colorIdx: ci, up: { ...freshUp(), ...up }, ammo, cd: cd || {}, bd: bd || null, treasure: tr ? { x: tr[0], z: tr[1], dig: tr[2] } : null, design: id === myId ? myDesign : DEFAULT_DESIGN });
   }
   const kids = new Set((m.k || []).map(k => k[0]));
   for (let i = kegs.length - 1; i >= 0; i--) if (!kids.has(kegs[i].id)) { scene.remove(kegs[i].m); kegs.splice(i, 1); }
@@ -3121,7 +3165,7 @@ const CONTROLS = `
     <tr><td>Right-click / X</td><td>Fire both broadsides at once (whichever are loaded)</td></tr>
     <tr><td>Q / E</td><td>Swing aim to port / starboard — press again to fire</td></tr>
     <tr><td>1 – 4</td><td>Switch ammo (once unlocked at the shipwright)</td></tr>
-    <tr><td>G</td><td>Board a crippled enemy alongside (below 35% hull), then 1 / 2 / 3 to plunder, capture or scuttle</td></tr>
+    <tr><td>G</td><td>Board a crippled enemy alongside (below 35% hull), then 1 / 2 / 3 to plunder, capture or scuttle — or dig at a treasure X</td></tr>
     <tr><td>C</td><td>Your ship class's signature move (smoke / rapid reload / all guns)</td></tr>
     <tr><td>F / R / Shift</td><td>Abilities: powder kegs / mortar strike / speed burst</td></tr>
     <tr><td>B</td><td>Shipwright — buy upgrades &amp; repairs</td></tr>
@@ -3586,7 +3630,57 @@ function actionG() {
   if (net.mode === 'guest') sendToHost({ t: 'g' });
   else hostActionG(profiles.get(myId));
 }
-function hostActionG(prof) { if (prof && gameActive) startBoarding(prof); }
+function hostActionG(prof) {
+  if (!prof || !gameActive) return;
+  if (nearTreasure(prof)) startDig(prof);
+  else startBoarding(prof);
+}
+
+// ---------- treasure maps ----------
+const DIG_RANGE = 18, DIG_TIME = 4;
+function giveTreasureMap(prof) {
+  if (prof.treasure) { giveGold(prof, 300); notify('📜 Another map — you already hold one. Sold it for 300 gold', prof); return; }
+  const s = prof.ship, from = s ? s.pos : ORIGIN;
+  const options = islands.filter(i => i.kind !== 'fort' && Math.hypot(i.x - from.x, i.z - from.z) > 160);
+  const isl = options[Math.floor(Math.random() * options.length)] || islands[0];
+  const a = rand(0, Math.PI * 2);
+  prof.treasure = { x: isl.x + Math.sin(a) * isl.r * 0.92, z: isl.z + Math.cos(a) * isl.r * 0.92, dig: -1 };
+  announce('📜 A treasure map! X marks the spot — check your chart (M)', 3, prof);
+}
+function nearTreasure(prof) {
+  const t = prof.treasure, s = prof.ship;
+  return t && isAlive(s) && Math.hypot(t.x - s.pos.x, t.z - s.pos.z) < DIG_RANGE + 4 * s.scale;
+}
+function startDig(prof) {
+  const s = prof.ship;
+  if (prof.treasure.dig >= 0) return;
+  if (s.speed > 5) { notify('Slow down to drop anchor and dig', prof); return; }
+  prof.treasure.dig = 0;
+  notify('⛏ The crew rows ashore to dig…', prof);
+}
+function updateDig(prof, dt) {
+  const t = prof.treasure;
+  if (!t || t.dig < 0) return;
+  if (!nearTreasure(prof) || prof.ship.speed > 6) { t.dig = -1; notify('Digging abandoned — stay close and slow', prof); return; }
+  t.dig += dt / DIG_TIME;
+  if (t.dig >= 1) {
+    prof.treasure = null;
+    const g = Math.round((400 + 150 * Math.max(1, wave)) * rand(0.8, 1.3));
+    giveGold(prof, g);
+    let extra = '';
+    if (Math.random() < 0.35) {
+      const keys = Object.keys(UPGRADES).filter(k => k !== 'repair' && k !== 'escort' && (prof.up[k] || 0) < UPGRADES[k].max);
+      if (keys.length) {
+        const k = keys[Math.floor(Math.random() * keys.length)];
+        prof.up[k] = (prof.up[k] || 0) + 1;
+        if (prof.ship) prof.ship.applyStats(prof);
+        extra = ` and a chest holding ${UPGRADES[k].icon} ${UPGRADES[k].name}!`;
+      }
+    }
+    announce(`💰 Treasure! +${g} gold${extra}`, 3.5, prof);
+    sfxFor('coin', prof);
+  }
+}
 function boardChoice(c) {
   if (net.mode === 'guest') sendToHost({ t: 'bc', c });
   else resolveBoarding(profiles.get(myId), c);
@@ -3715,7 +3809,7 @@ function updateHUD() {
   // shallow-water hints
   const wt = $('warnTxt');
   const shNow = isAlive(me) ? shallowAt(me.pos.x, me.pos.z) : 0;
-  if (shNow > 0.5 && me.scale >= 0.95) { wt.textContent = '⚠ Running aground — your deep hull is scraping the shallows!'; wt.style.color = '#ffb070'; }
+  if (shNow > 0.5 && me.scale >= 0.95 && me.speed > 3) { wt.textContent = '⚠ Running aground — your deep hull is scraping the shallows!'; wt.style.color = '#ffb070'; }
   else if (shNow > 0.5) { wt.textContent = '🌊 Shallows — deep-hulled ships can’t follow you here'; wt.style.color = '#9ff0e6'; }
   else wt.textContent = '';
   // boarding: prompt when a crippled enemy is alongside, then the fight and the prize choice
@@ -3740,7 +3834,11 @@ function updateHUD() {
   } else {
     panel.style.display = 'none'; panel._sig = null;
     const cand = isAlive(me) && gameActive && me !== menuShip ? boardCandidate(me) : null;
-    bhint.textContent = cand ? `[G] Board the crippled ${cand.name || 'enemy ship'}!` : '';
+    const trh = myTreasure();
+    const nearX = trh && isAlive(me) && Math.hypot(trh.x - me.pos.x, trh.z - me.pos.z) < DIG_RANGE + 4 * me.scale;
+    if (nearX && trh.dig >= 0) bhint.textContent = `⛏ Digging for treasure… ${Math.round(trh.dig * 100)}%`;
+    else if (nearX) bhint.textContent = '[G] Drop anchor and dig for treasure!';
+    else bhint.textContent = cand ? `[G] Board the crippled ${cand.name || 'enemy ship'}!` : '';
   }
   // respawn countdown
   const rs = $('respawn');
@@ -3764,6 +3862,11 @@ function updateHUD() {
   // boss bar
   const bb = $('bossbar');
   $('objective').textContent = objective.text;
+  const tr = myTreasure();
+  if (tr && isAlive(me)) {
+    const dx = tr.x - me.pos.x, dz = tr.z - me.pos.z;
+    $('treasureTxt').textContent = `📜 Treasure: X marks the spot — ${Math.round(Math.hypot(dx, dz))} m ${compassName(Math.atan2(dx, dz))}`;
+  } else $('treasureTxt').textContent = '';
   if (kraken && !kraken.dead && !kraken.dying) { bb.style.display = 'block'; $('bossName').textContent = kraken.name; $('bossFill').style.width = (kraken.hp / kraken.maxHp * 100) + '%'; }
   else if (boss) { bb.style.display = 'block'; $('bossName').textContent = '☠ ' + boss.name + ' ☠'; $('bossFill').style.width = (boss.hp / boss.maxHp * 100) + '%'; }
   else bb.style.display = 'none';
@@ -3931,7 +4034,7 @@ if (location.search.includes('debug')) window.__dbg = {
   profiles, islands, reefs, forts, fleet, shallowAt, startWave, applyBuy, useAbility, triggerAbility, selectAmmo,
   gold(n) { const p = profiles.get(myId); p.gold += n; },
   wind, sailEfficiency, windFactor, startBoarding, resolveBoarding, boardCandidate,
-  get kraken() { return kraken; }, env, setWeather, spawnEnemyTest: spawnEnemy, get objective() { return objective; }, get waveEvent() { return waveEvent; }, eventFor,
+  get kraken() { return kraken; }, giveTreasureMap, spawnMap, env, setWeather, spawnEnemyTest: spawnEnemy, get objective() { return objective; }, get waveEvent() { return waveEvent; }, eventFor,
   applyBurnTest(s, n, per) { s.lastHitT = -99; applyBurn(s, n, per, null); },
 };
 renderer.setAnimationLoop(() => {
