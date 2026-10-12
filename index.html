@@ -110,6 +110,16 @@ const CANNON_SETS = {
   6: [-4.8, -3.2, -1.6, 0, 1.6, 3.2],
 };
 const PEER_PREFIX = 'broadside-pirates-v1-';
+const PEER_OPTS = {
+  debug: 1,
+  config: {
+    iceServers: [
+      { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] },
+      { urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'], username: 'peerjs', credential: 'peerjsp' },
+    ],
+  },
+};
+const JOIN_TIMEOUT = 20000;
 const MAX_PLAYERS = 4;
 const REPAIR_COST = 100;
 const UPGRADES = {
@@ -1353,7 +1363,7 @@ function startHost() {
   profiles.set(myId, makeProfile(myId, myName, 0));
   net.code = genCode();
   renderHostLobby('Opening a room…');
-  const peer = new Peer(PEER_PREFIX + net.code, { debug: 0 });
+  const peer = new Peer(PEER_PREFIX + net.code, PEER_OPTS);
   net.peer = peer;
   peer.on('open', () => { if (state === 'lobby') renderHostLobby(); });
   peer.on('connection', (conn) => {
@@ -1442,24 +1452,44 @@ function startJoin(code) {
   leaveNet();
   clearEntities(); profiles.clear(); netPlayers.clear();
   net.mode = 'guest'; state = 'lobby'; myId = null; net.lobby = [];
-  renderGuestLobby(`Connecting to room ${code}…`);
-  const peer = new Peer({ debug: 0 });
+  net.lastCode = code;
+  renderGuestLobby(`Step 1/3: reaching the matchmaking server…`);
+  const peer = new Peer(PEER_OPTS);
   net.peer = peer;
+  // never hang forever: give up with a useful message
+  clearTimeout(net.joinTimer);
+  net.joinTimer = setTimeout(() => {
+    if (net.peer !== peer || myId) return;
+    hostLost(`Could not connect to room ${code} (stuck at: ${net.joinStage}). ` +
+      'Check the code, make sure the host’s game tab is still open on the lobby screen, and try again. ' +
+      'If it keeps failing, one of your networks (school/office Wi-Fi, some mobile data) may be blocking direct connections — try another network or a phone hotspot.');
+  }, JOIN_TIMEOUT);
+  net.joinStage = 'matchmaking server';
   peer.on('open', () => {
+    net.joinStage = 'finding the host';
+    renderGuestLobby(`Step 2/3: looking for room ${code}…`);
     const conn = peer.connect(PEER_PREFIX + code, { reliable: true });
     net.hostConn = conn;
-    conn.on('open', () => conn.send({ t: 'join', name: myName }));
+    conn.on('iceStateChanged', (s) => {
+      if (net.hostConn !== conn || myId) return;
+      net.joinStage = 'direct connection (' + s + ')';
+      if (s === 'checking') renderGuestLobby(`Step 3/3: found room ${code}, opening a direct connection…`);
+      if (s === 'failed') hostLost(`Found room ${code}, but your browsers could not connect directly. One of the networks is blocking it — try another Wi-Fi or a phone hotspot.`);
+    });
+    conn.on('open', () => { net.joinStage = 'joining the crew'; conn.send({ t: 'join', name: myName }); });
     conn.on('data', onHostMsg);
     conn.on('close', () => { if (net.hostConn === conn) hostLost('The host closed the game.'); });
+    conn.on('error', (e) => { if (net.hostConn === conn && !myId) hostLost('Connection error: ' + (e && e.type || e)); });
   });
   peer.on('error', (err) => {
     if (net.peer !== peer) return;
-    hostLost(err.type === 'peer-unavailable' ? `Room ${code} was not found.` : 'Network error: ' + err.type);
+    hostLost(err.type === 'peer-unavailable' ? `Room ${code} was not found — check the code and that the host is still in the lobby.` : 'Network error: ' + err.type);
   });
 }
 
 function hostLost(msg) {
   if (net.mode !== 'guest') return;
+  clearTimeout(net.joinTimer);
   leaveNet();
   if (document.pointerLockElement) document.exitPointerLock();
   showMainMenu(msg);
@@ -1468,7 +1498,7 @@ function hostLost(msg) {
 function onHostMsg(m) {
   if (net.mode !== 'guest' || !m) return;
   switch (m.t) {
-    case 'welcome': myId = m.id; break;
+    case 'welcome': myId = m.id; clearTimeout(net.joinTimer); renderGuestLobby(); break;
     case 'full': hostLost('That room is full (4 captains max).'); break;
     case 'lobby':
       net.lobby = m.players; gameMode = m.mode;
@@ -1598,7 +1628,7 @@ function showMainMenu(msg = '') {
     ${msg ? `<div class="err">${esc(msg)}</div>` : ''}
     <div class="row">Captain name: <input id="nameIn" maxlength="16" value="${esc(myName)}"></div>
     <div class="row"><button data-act="solo">⚓ Solo Voyage</button> <button data-act="host">🏴‍☠️ Host Online Game</button></div>
-    <div class="row"><input id="codeIn" maxlength="5" placeholder="CODE" style="width:140px;text-transform:uppercase;letter-spacing:4px"> <button data-act="join">Join Online Game</button></div>
+    <div class="row"><input id="codeIn" maxlength="5" placeholder="CODE" value="${esc(net.lastCode || '')}" style="width:140px;text-transform:uppercase;letter-spacing:4px"> <button data-act="join">${net.lastCode && msg ? '↻ Retry Join' : 'Join Online Game'}</button></div>
     <div style="opacity:.75;font-size:14px">Bosses every 5th wave · Forts guard some islands · Up to 4 captains online (co-op or PvP)</div>
     <details><summary>Controls</summary>${CONTROLS}</details>`);
 }
