@@ -28,6 +28,7 @@
   #minimap { position: absolute; right: 18px; bottom: 18px; border-radius: 50%; border: 3px solid #c9a45c; background: rgba(8,40,70,.6); }
   #banner { position: absolute; top: 22%; width: 100%; text-align: center; font-size: 50px; font-weight: bold; color: #ffe6a0; text-shadow: 0 4px 10px #000, 0 0 2px #000; opacity: 0; transition: opacity .4s; }
   #toast { position: absolute; top: 32%; width: 100%; text-align: center; font-size: 24px; color: #b6ffb0; text-shadow: 0 2px 6px #000; opacity: 0; transition: opacity .3s; }
+  #aimLabel { position: absolute; transform: translate(-50%, -100%); font-size: 15px; font-weight: bold; letter-spacing: 1px; white-space: nowrap; padding: 2px 10px; border-radius: 6px; background: rgba(0,0,0,.35); text-shadow: 0 1px 3px #000; display: none; }
   #respawn { position: absolute; top: 45%; width: 100%; text-align: center; font-size: 30px; text-shadow: 0 2px 6px #000; }
   #bossbar { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); width: 440px; text-align: center; display: none; text-shadow: 0 2px 4px #000; }
   #bossbar .bar { height: 16px; border-color: #b8860b; }
@@ -103,6 +104,7 @@
   <div id="banner"></div>
   <div id="toast"></div>
   <div id="respawn"></div>
+  <div id="aimLabel"></div>
 </div>
 <div id="dmg"></div>
 <div id="shop"><div class="shopbox" id="shopBox"></div></div>
@@ -1908,37 +1910,181 @@ $('shop').addEventListener('click', (e) => {
 function aimSide() { return Math.sin(camYaw) < 0 ? 'port' : 'star'; }
 function aimElevation() { return aimElev; }
 
-const TRAJ_N = 90;
-const trajPos = new Float32Array(TRAJ_N * 3);
-const trajGeo = new THREE.BufferGeometry();
-trajGeo.setAttribute('position', new THREE.BufferAttribute(trajPos, 3));
-const trajLine = new THREE.Line(trajGeo, new THREE.LineBasicMaterial({ color: 0xffe28a, transparent: true, opacity: 0.85, fog: false }));
-trajLine.frustumCulled = false;
-const marker = new THREE.Mesh(new THREE.RingGeometry(1.6, 2.4, 28).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffe28a, transparent: true, opacity: 0.8, fog: false }));
-scene.add(trajLine, marker);
-
-function updateAimPreview(t) {
-  const visible = state === 'playing' && !shopOpen && isAlive(me) && me !== menuShip;
-  trajLine.visible = marker.visible = visible;
-  if (!visible) return;
-  const side = aimSide(), elev = aimElevation();
-  const p = me.local(side === 'port' ? 3.15 : -3.15, 1.05, 0);
+// ---- shot simulation shared by the aim display ----
+const AIM_DT = 0.04;
+function aimCanHit(s) { return s !== me && isAlive(s) && (s.kind !== 'p' || gameMode === 'pvp'); }
+// steps a cannonball forward; stops on water, land, or an enemy hull/fort
+function simulateShot(p, v, t, pts) {
+  for (let i = 0; i < 160; i++) {
+    v.y -= G * AIM_DT;
+    p.addScaledVector(v, AIM_DT);
+    if (pts) pts.push(p.clone());
+    for (const s of ships) if (aimCanHit(s) && hitShip(s, p)) return { end: p, hit: 'target' };
+    for (const f of forts) if (f.hit(p)) return { end: p, hit: 'target' };
+    for (const isl of islands) {
+      const d = Math.hypot(p.x - isl.x, p.z - isl.z);
+      if (d < isl.r && p.y < isl.h * (1 - d / isl.r) + 1.5) return { end: p, hit: 'land' };
+    }
+    if (p.y < waveHeight(p.x, p.z, t)) return { end: p, hit: null };
+  }
+  return { end: p, hit: null };
+}
+function shotStart(side, cz, elev) {
   const sd = me.sideDir(side);
+  const p = me.local(side === 'port' ? 3.15 : -3.15, 1.05, cz);
   const v = new THREE.Vector3(sd.x * Math.cos(elev), Math.sin(elev), sd.z * Math.cos(elev))
     .multiplyScalar(BALL_SPEED).addScaledVector(me.forward(), me.speed);
-  let n = 0;
-  while (n < TRAJ_N) {
-    trajPos[n * 3] = p.x; trajPos[n * 3 + 1] = p.y; trajPos[n * 3 + 2] = p.z; n++;
-    if (p.y < waveHeight(p.x, p.z, t)) break;
-    v.y -= G * 0.05; p.addScaledVector(v, 0.05);
+  return [p, v];
+}
+
+// ---- flowing trajectory ribbon (billboarded toward the camera) ----
+const ARC_N = 170;
+const arcPos = new Float32Array(ARC_N * 2 * 3), arcLine = new Float32Array(ARC_N * 2 * 2);
+const arcGeo = new THREE.BufferGeometry();
+arcGeo.setAttribute('position', new THREE.BufferAttribute(arcPos, 3));
+arcGeo.setAttribute('aLine', new THREE.BufferAttribute(arcLine, 2));
+const arcIdx = [];
+for (let i = 0; i < ARC_N - 1; i++) { const a = i * 2; arcIdx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+arcGeo.setIndex(arcIdx);
+const arcMat = new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: false,
+  uniforms: { uColor: { value: new THREE.Color() }, uTime: { value: 0 } },
+  vertexShader: `attribute vec2 aLine; varying vec2 vL;
+    void main(){ vL = aLine; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: `uniform vec3 uColor; uniform float uTime; varying vec2 vL;
+    void main(){
+      float dash = step(0.4, fract(vL.x * 0.3 - uTime * 1.8));
+      float a = mix(0.2, 0.95, vL.y) * mix(0.35, 1.0, dash);
+      gl_FragColor = vec4(uColor * mix(0.75, 1.3, dash), a);
+      #include <colorspace_fragment>
+    }`,
+});
+const arcMesh = new THREE.Mesh(arcGeo, arcMat);
+arcMesh.frustumCulled = false;
+arcMesh.renderOrder = 9;
+
+// ---- impact zone covering the whole broadside's landing spread ----
+const zoneMat = new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, depthTest: false, fog: false,
+  uniforms: { uColor: { value: new THREE.Color() }, uTime: { value: 0 }, uFill: { value: 1 }, uSize: { value: new THREE.Vector2(10, 5) } },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: `uniform vec3 uColor; uniform float uTime, uFill; uniform vec2 uSize; varying vec2 vUv;
+    void main(){
+      vec2 p = (vUv - 0.5) * uSize;
+      float r = 1.6;
+      vec2 q = abs(p) - (uSize * 0.5 - r);
+      float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;   // rounded-rectangle distance
+      if (d > 0.0) discard;
+      float edge = smoothstep(-0.6, 0.0, d);
+      float stripes = 0.5 + 0.5 * sin((p.x + p.y) * 1.4 - uTime * 5.0);
+      float filled = step(vUv.x, uFill);
+      float a = edge * 0.95 + (0.10 + 0.12 * stripes) * mix(0.3, 1.0, filled);
+      gl_FragColor = vec4(uColor, a);
+      #include <colorspace_fragment>
+    }`,
+});
+const zone = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), zoneMat);
+zone.renderOrder = 10;
+
+// per-cannon impact markers and a rotating center reticle
+const dotMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95, depthTest: false, depthWrite: false, fog: false });
+const DOT_GEO = new THREE.RingGeometry(0.45, 0.85, 18).rotateX(-Math.PI / 2);
+const dots = [];
+for (let i = 0; i < 10; i++) { const d = new THREE.Mesh(DOT_GEO, dotMat); d.renderOrder = 11; dots.push(d); }
+const reticle = new THREE.Group();
+reticle.add(new THREE.Mesh(new THREE.RingGeometry(2.3, 2.65, 40).rotateX(-Math.PI / 2), dotMat));
+for (let i = 0; i < 4; i++) {
+  const tick = new THREE.Mesh(new THREE.PlaneGeometry(0.35, 1.4).rotateX(-Math.PI / 2), dotMat);
+  const a = i * Math.PI / 2;
+  tick.position.set(Math.sin(a) * 3.3, 0, Math.cos(a) * 3.3); tick.rotation.y = a;
+  reticle.add(tick);
+}
+reticle.traverse(o => { o.renderOrder = 11; });
+scene.add(arcMesh, zone, reticle, ...dots);
+
+const AIM_COLORS = { ready: new THREE.Color(0xffd34d), target: new THREE.Color(0x4dff88), reload: new THREE.Color(0x9aa7b5), land: new THREE.Color(0xd08a40) };
+const _tan = new THREE.Vector3(), _toCam = new THREE.Vector3(), _perp = new THREE.Vector3();
+
+function updateAimPreview(t) {
+  const label = $('aimLabel');
+  const visible = state === 'playing' && !shopOpen && isAlive(me) && me !== menuShip;
+  arcMesh.visible = zone.visible = reticle.visible = visible;
+  if (!visible) { dots.forEach(d => (d.visible = false)); label.style.display = 'none'; return; }
+
+  const side = aimSide(), elev = aimElevation();
+  // 1) one landing point per cannon on this side
+  const lands = [];
+  let anyTarget = false, allLand = true;
+  me.cannonZ.forEach((cz, i) => {
+    const [p, v] = shotStart(side, cz, elev);
+    const r = simulateShot(p, v, t, null);
+    lands.push(r.end);
+    if (r.hit === 'target') anyTarget = true;
+    if (r.hit !== 'land') allLand = false;
+    const d = dots[i];
+    d.visible = true;
+    d.position.set(r.end.x, waveHeight(r.end.x, r.end.z, t) + 0.3, r.end.z);
+  });
+  for (let i = me.cannonZ.length; i < dots.length; i++) dots[i].visible = false;
+
+  // 2) the center trajectory as a flowing ribbon
+  const mid = me.cannonZ.reduce((a, b) => a + b, 0) / me.cannonZ.length;
+  const [p0, v0] = shotStart(side, mid, elev);
+  const pts = [p0.clone()];
+  simulateShot(p0, v0, t, pts);
+  const n = Math.min(pts.length, ARC_N);
+  let dist = 0;
+  for (let i = 0; i < n; i++) {
+    const a = pts[i], b = pts[Math.min(i + 1, n - 1)], c = pts[Math.max(i - 1, 0)];
+    _tan.subVectors(b, c).normalize();
+    _toCam.subVectors(camera.position, a);
+    _perp.crossVectors(_tan, _toCam).normalize();
+    const f = i / Math.max(1, n - 1), w = 0.16 + 0.34 * f;
+    if (i > 0) dist += a.distanceTo(pts[i - 1]);
+    arcPos.set([a.x + _perp.x * w, a.y + _perp.y * w, a.z + _perp.z * w, a.x - _perp.x * w, a.y - _perp.y * w, a.z - _perp.z * w], i * 6);
+    arcLine.set([dist, f, dist, f], i * 4);
   }
-  trajGeo.setDrawRange(0, n);
-  trajGeo.attributes.position.needsUpdate = true;
-  marker.position.set(p.x, waveHeight(p.x, p.z, t) + 0.25, p.z);
-  aimRange = Math.hypot(p.x - me.pos.x, p.z - me.pos.z);
-  const ready = me.reload[side] <= 0;
-  trajLine.material.color.set(ready ? 0xffe28a : 0x8a8a8a);
-  marker.material.color.set(ready ? 0xffe28a : 0x8a8a8a);
+  arcGeo.setDrawRange(0, Math.max(0, n - 1) * 6);
+  arcGeo.attributes.position.needsUpdate = true;
+  arcGeo.attributes.aLine.needsUpdate = true;
+
+  // 3) impact zone spanning all landing points, aligned with the ship
+  const fwd = me.forward();
+  const c = new THREE.Vector3();
+  lands.forEach(l => c.add(l));
+  c.divideScalar(lands.length);
+  let lo = Infinity, hi = -Infinity;
+  for (const l of lands) { const k = (l.x - c.x) * fwd.x + (l.z - c.z) * fwd.z; lo = Math.min(lo, k); hi = Math.max(hi, k); }
+  const len = (hi - lo) + 6 * me.scale, wid = 5.5 * me.scale;
+  const cy = waveHeight(c.x, c.z, t) + 0.3;
+  zone.position.set(c.x + fwd.x * (lo + hi) / 2, cy, c.z + fwd.z * (lo + hi) / 2);
+  zone.rotation.y = me.heading - Math.PI / 2;
+  zone.scale.set(len, 1, wid);
+  zoneMat.uniforms.uSize.value.set(len, wid);
+  aimRange = Math.hypot(c.x - me.pos.x, c.z - me.pos.z);
+
+  // 4) state: on target / ready / blocked by land / reloading
+  const reload = me.reload[side], ready = reload <= 0;
+  const col = !ready ? AIM_COLORS.reload : anyTarget ? AIM_COLORS.target : allLand ? AIM_COLORS.land : AIM_COLORS.ready;
+  arcMat.uniforms.uColor.value.copy(col);
+  zoneMat.uniforms.uColor.value.copy(col);
+  dotMat.color.copy(col);
+  arcMat.uniforms.uTime.value = zoneMat.uniforms.uTime.value = t;
+  zoneMat.uniforms.uFill.value = ready ? 1 : 1 - reload / me.reloadTime;
+  reticle.position.set(zone.position.x, cy + 0.05, zone.position.z);
+  reticle.rotation.y = t * (anyTarget ? 2.5 : 0.6);
+  reticle.scale.setScalar(me.scale * (anyTarget && ready ? 1 + 0.12 * Math.sin(t * 10) : 1));
+
+  // 5) floating label above the impact zone
+  TV.set(zone.position.x, cy + 4, zone.position.z).project(camera);
+  if (TV.z > 1) { label.style.display = 'none'; return; }
+  label.style.display = 'block';
+  label.style.left = ((TV.x * 0.5 + 0.5) * innerWidth) + 'px';
+  label.style.top = ((-TV.y * 0.5 + 0.5) * innerHeight) + 'px';
+  label.style.color = '#' + col.getHexString(THREE.SRGBColorSpace);
+  const m = `${Math.round(aimRange)} m`;
+  label.textContent = !ready ? `Reloading ${reload.toFixed(1)}s · ${m}`
+    : anyTarget ? `◎ ON TARGET · ${m}` : allLand ? `Blocked by land · ${m}` : m;
 }
 
 function fireSide(side) {
