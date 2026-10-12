@@ -15,7 +15,12 @@ A 3D pirate ship battle game that runs in the browser (Three.js). Sail, aim your
 | Right-click / X | Fire both broadsides at once |
 | Q / E | Swing aim to port / starboard (press again to fire) |
 | M | Big map |
+| G | Board a crippled ship / dig for treasure |
+| C | Ship class signature move |
+| N | Music on/off |
 | 1 – 4 | Switch ammo: round / chain / fire / explosive |
 | F / R / Shift | Powder kegs / mortar strike / speed burst |
 | B | Shipwright (upgrades, ammo, abilities, escorts) |
 | Esc / P | Pause |
+
+**Phones & tablets:** on-screen joystick (steer/sails), fire and ability buttons, drag to look around.

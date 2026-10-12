@@ -56,6 +56,28 @@
   #boardPanel .bar > div { background: linear-gradient(#ff9a60, #c04020); transition: none; }
   #boardPanel button { font-size: 15px; padding: 8px 12px; }
   #warnTxt { position: absolute; top: 62%; width: 100%; text-align: center; font-size: 20px; text-shadow: 0 2px 5px #000; }
+  .dnum { position: absolute; transform: translate(-50%, -50%); font-weight: bold; font-size: 21px; text-shadow: 0 2px 3px #000, 0 0 2px #000; pointer-events: none; white-space: nowrap; }
+  .dnum.out { color: #ffe680; }
+  .dnum.in { color: #ff6a5a; font-size: 19px; }
+  .dnum.burn, .dnum.burnIn { color: #ff9a40; font-size: 15px; }
+  #tutorial { position: absolute; top: 90px; left: 50%; transform: translateX(-50%); padding: 10px 18px; font-size: 19px; text-align: center; background: rgba(40,24,10,.85); border: 2px solid #ffd977; border-radius: 10px; display: none; max-width: 640px; }
+  #tutorial b { color: #ffd977; }
+  #touch { display: none; }
+  body.touch #touch { display: block; }
+  body.touch, body.touch canvas { touch-action: none; }
+  #stick { position: fixed; left: 26px; bottom: 30px; width: 150px; height: 150px; border-radius: 50%; background: rgba(255,255,255,.08); border: 2px solid rgba(201,164,92,.6); }
+  #knob { position: absolute; left: 50%; top: 50%; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 50%; background: rgba(255,217,119,.45); border: 2px solid #ffd977; }
+  #tbtns { position: fixed; right: 10px; bottom: 10px; display: grid; grid-template-columns: repeat(4, 54px); gap: 5px; }
+  #tbtns button { margin: 0; padding: 6px 2px; font-size: 11px; min-height: 40px; opacity: .85; }
+  body.touch #minimap, body.touch #mmLegend, body.touch #hint { display: none; }
+  body.touch #compass { transform: scale(.62); transform-origin: top right; }
+  body.touch #topleft { transform: scale(.75); transform-origin: top left; }
+  body.touch #bottom { left: 44%; bottom: 4px; transform: translateX(-50%) scale(.7); transform-origin: bottom center; }
+  body.touch #loadout { left: 44%; bottom: 60px; transform: translateX(-50%) scale(.7); transform-origin: bottom center; }
+  body.touch #bigmap { width: min(620px, 80vh); height: min(620px, 80vh); }
+  body.touch #banner { font-size: 30px; }
+  body.touch #toast, body.touch #boardHint { font-size: 17px; }
+  body.touch #stick { width: 130px; height: 130px; left: 16px; bottom: 16px; }
   #respawn { position: absolute; top: 45%; width: 100%; text-align: center; font-size: 30px; text-shadow: 0 2px 6px #000; }
   #bossbar { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); width: 440px; text-align: center; display: none; text-shadow: 0 2px 4px #000; }
   #bossbar .bar { height: 16px; border-color: #b8860b; }
@@ -152,12 +174,23 @@
   <div id="banner"></div>
   <div id="toast"></div>
   <div id="respawn"></div>
+  <div id="tutorial"></div>
   <div id="aimLabel"></div>
   <div id="warnTxt"></div>
   <div id="boardHint"></div>
   <div id="boardPanel"></div>
 </div>
 <div id="dmg"></div>
+<div id="touch">
+  <div id="stick"><div id="knob"></div></div>
+  <div id="tbtns">
+    <button data-t="port">◀ Port</button><button data-t="fire">🔥 Fire</button><button data-t="star">Stbd ▶</button>
+    <button data-t="up">▲ Range</button><button data-t="both">⇆ Both</button><button data-t="down">▼ Range</button>
+    <button data-t="special">C</button><button data-t="kegs">F</button><button data-t="mortar">R</button>
+    <button data-t="boost">💨</button><button data-t="g">G</button><button data-t="shop">🛠</button>
+    <button data-t="map">🗺</button><button data-t="pause">⏸</button>
+  </div>
+</div>
 <div id="shop"><div class="shopbox" id="shopBox"></div></div>
 <div id="overlay"><div id="panel"></div></div>
 
@@ -571,6 +604,13 @@ const STRIPE_GEO = new THREE.ExtrudeGeometry(hullShape(), { depth: 0.3, bevelEna
   .rotateX(-Math.PI / 2).scale(1.09, 1, 1.04).translate(0, 0.95, 0);
 const CANNON_GEO = new THREE.CylinderGeometry(0.2, 0.28, 1.4, 8).rotateZ(Math.PI / 2);
 
+function tornSail(geo) {
+  const g = geo.clone(), idx = g.index.array, keep = [];
+  for (let i = 0; i < idx.length; i += 3) if (Math.random() > 0.24) keep.push(idx[i], idx[i + 1], idx[i + 2]);
+  g.setIndex(keep);
+  return g;
+}
+const SAIL_SOOT = new THREE.Color(0x3a3024);
 function sailGeo(w, h) {
   const g = new THREE.PlaneGeometry(w, h, 8, 4);
   const p = g.attributes.position;
@@ -672,7 +712,7 @@ function buildShip(c, isPlayer, masts = 2) {
     for (const [w, sh, top] of [lower, upper]) {
       add(new THREE.CylinderGeometry(0.08, 0.08, w + 0.6, 6), woodM, 0, top, z + 0.2, 0, 0, Math.PI / 2);
       const s = add(sailGeo(w, sh), sailM, 0, top - sh / 2, z + 0.35);
-      sails.push({ mesh: s, top, h: sh });
+      sails.push({ mesh: s, top, h: sh, full: s.geometry, torn: null });
     }
   };
   let mainZ = -1.4, mainH = 13.5;
@@ -843,6 +883,7 @@ class Ship {
     this.regen = 0; this.regenDelay = 6; this.lastHitT = -99; this.repairing = false;
     this.role = null; this.flank = Math.random() < 0.5 ? -1 : 1; this.slotOff = rand(-1.2, 1.2); this.losShift = 0;
     this.mortarT = rand(3, 6); this.reloadMul = 1; this.aground = false;
+    this.listSide = Math.random() < 0.5 ? -1 : 1; this.isTorn = false;
     this.dodge = 0; this.armor = 0; this.longShot = false; this.chasers = false;
     this.smokeT = 0; this.rapidT = 0; this.chaserT = 1; this.engaged = true;
     this.remote = false; this.net = null; this.profile = null; this.lastHitBy = null;
@@ -950,7 +991,7 @@ class Ship {
         }
       }
       this.aground = drag < 1;
-      const vmax = this.maxSpeed * drag * windFactor(this) * (this.slowT > 0 ? 0.6 : 1) * (this.boostT > 0 ? 1.6 : 1);
+      const vmax = this.maxSpeed * drag * (0.78 + 0.22 * clamp(this.hp / this.maxHp, 0, 1)) * windFactor(this) * (this.slowT > 0 ? 0.6 : 1) * (this.boostT > 0 ? 1.6 : 1);
       this.speed += (this.sail * vmax - this.speed) * Math.min(1, dt * (this.boostT > 0 ? 1.5 : 0.45));
       const turnEff = 0.35 + 0.65 * Math.min(1, this.speed / (this.maxSpeed * 0.6));
       this.heading += this.steer * this.turnRate * turnEff * dt;
@@ -1007,7 +1048,20 @@ class Ship {
 
   sync(t, dt) {
     this.mesh.position.copy(this.pos);
-    this.mesh.rotation.set(this.pitch, this.heading, this.roll + this.rollKick, 'YXZ');
+    // battle damage: a listing hull and shredded, darkened sails
+    const hpF = clamp(this.hp / this.maxHp, 0, 1);
+    const list = this.sinking ? 0 : this.listSide * (1 - hpF) * 0.13;
+    this.mesh.rotation.set(this.pitch, this.heading, this.roll + this.rollKick + list, 'YXZ');
+    const tornNow = hpF < 0.5 && !this.sinking;
+    if (tornNow !== this.isTorn) {
+      this.isTorn = tornNow;
+      for (const sl of this.sails) { if (tornNow && !sl.torn) sl.torn = tornSail(sl.full); sl.mesh.geometry = tornNow ? sl.torn : sl.full; }
+    }
+    if (this.sails.length) {
+      const sm = this.sails[0].mesh.material;
+      if (!sm.userData.base) sm.userData.base = sm.color.clone();
+      sm.color.copy(sm.userData.base).lerp(SAIL_SOOT, (1 - hpF) * 0.55);
+    }
     this.sailVis += (this.sail - this.sailVis) * Math.min(1, dt * 2);
     const s = 0.18 + 0.82 * this.sailVis;
     for (const sl of this.sails) { sl.mesh.scale.y = s; sl.mesh.position.y = sl.top - sl.h * s / 2; }
@@ -1071,7 +1125,10 @@ class Ship {
 
   damage(amount, attacker, quiet = false, dot = false) {
     if (this.sinking || this.dead || this.remote) return;
-    this.hp -= amount * (1 - this.armor);
+    const dealt = amount * (1 - this.armor);
+    this.hp -= dealt;
+    if (attacker && attacker.kind === 'p' && attacker.profile) dmgNum(this.pos, this.id, dealt, dot ? 'burn' : 'out', attacker.profile);
+    if (this.kind === 'p' && this.profile) dmgNum(this.pos, this.id, dealt, dot ? 'burnIn' : 'in', this.profile);
     if (!dot) this.lastHitT = time;   // burning slows repairs but doesn't reset the repair timer
     if (attacker) this.lastHitBy = attacker;
     if (this === me && !quiet) hurtFx();
@@ -1249,6 +1306,10 @@ class Kraken {
       if (part.k.hp <= 0 && part.k.state !== 'sink') { part.k.state = 'sink'; part.k.t = 0; }
     } else this.hp -= amount * 1.5;
     if (attacker) this.lastHitBy = attacker;
+    if (attacker && attacker.kind === 'p' && attacker.profile) {
+      const pos = part.k ? new THREE.Vector3(part.k.x, 8, part.k.z) : this.head.position.clone().setY(this.head.position.y + 8);
+      dmgNum(pos, part.k ? 'kt' + part.k.id : 'kh', part.k ? amount : amount * 1.5, 'out', attacker.profile);
+    }
     if (this.hp <= 0) this.die();
   }
   die() {
@@ -2266,7 +2327,57 @@ function initAudio() {
   const rf = actx.createBiquadFilter(); rf.type = 'highpass'; rf.frequency.value = 1500;
   rainGain = actx.createGain(); rainGain.gain.value = 0;
   rs.connect(rf).connect(rainGain).connect(master); rs.start();
+  musicGain = actx.createGain(); musicGain.gain.value = 0; musicGain.connect(master); musicNext = actx.currentTime + 0.3;
 }
+// ---------- music: "Drunken Sailor" (traditional sea shanty), synthesized ----------
+const SHANTY = (() => {
+  const A = 69, G = 67, D = 62, F = 65, C = 60, E = 64, B = 71, Cs = 73, D5 = 74, C5 = 72;
+  const what = (n, x, y, z) => [[n, .5], [n, .25], [n, .25], [n, .5], [n, .25], [n, .25], [n, .5], [x, .5], [y, .5], [z, .5]];
+  const way = (n, x, y, z) => [[n, 1], [n, .5], [n, .5], [n, .5], [x, .5], [y, .5], [z, .5]];
+  const early = [[C5, .5], [A, .5], [G, .5], [E, .5], [D, 1], [D, 1]];
+  const lines = [what(A, D, F, A), what(G, C, E, G), what(A, B, Cs, D5), early, way(A, D, F, A), way(G, C, E, G), way(A, B, Cs, D5), early];
+  const byStep = {};
+  let beat = 0;
+  for (const line of lines) for (const [n, d] of line) { const st = Math.round(beat * 4); (byStep[st] = byStep[st] || []).push([n, d]); beat += d; }
+  return { byStep, steps: Math.round(beat * 4) };
+})();
+const chordAt = (beat) => { const line = Math.floor(beat / 4) % 4; return line === 3 ? (beat % 4 < 2 ? 48 : 50) : [50, 48, 50][line]; };
+let musicGain = null, musicOn = save.music !== false, musicNext = 0, musicStep = 0;
+const hz = (m) => 440 * Math.pow(2, (m - 69) / 12);
+function mNote(m, t, dur, vol, type = 'triangle') {
+  const o = actx.createOscillator(), g = actx.createGain();
+  o.type = type; o.frequency.value = hz(m);
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.012); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(g).connect(musicGain); o.start(t); o.stop(t + dur + 0.02);
+}
+function mNoise(t, dur, vol, type, f) {
+  const src = actx.createBufferSource(); src.buffer = noiseBuf;
+  const fl = actx.createBiquadFilter(); fl.type = type; fl.frequency.value = f;
+  const g = actx.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  src.connect(fl).connect(g).connect(musicGain); src.start(t, Math.random()); src.stop(t + dur);
+}
+function updateMusic() {
+  if (!actx || !musicGain || actx.state !== 'running') return;
+  const near = me && ships.some(s => teamOf(s) === 'E' && isAlive(s) && Math.hypot(s.pos.x - me.pos.x, s.pos.z - me.pos.z) < 170);
+  const combat = gameActive && (near || (kraken && !kraken.dead));
+  const boss = gameActive && (ships.some(s => s.kind === 'b' && isAlive(s)) || (kraken && !kraken.dead && !kraken.dying));
+  musicGain.gain.setTargetAtTime(musicOn ? (combat ? 0.15 : 0.11) : 0, actx.currentTime, 0.5);
+  const spb = 60 / (boss ? 132 : combat ? 116 : 96);
+  if (musicNext < actx.currentTime - 0.5) musicNext = actx.currentTime + 0.05;   // resync after a pause
+  while (musicNext < actx.currentTime + 0.25) {
+    const st = musicStep % SHANTY.steps, t = musicNext;
+    for (const [n, d] of SHANTY.byStep[st] || []) { mNote(n, t, d * spb * 0.95, 0.3); mNote(n + 12, t, d * spb * 0.5, 0.05, 'square'); }
+    if (st % 4 === 0) {
+      const beat = st / 4, root = chordAt(beat);
+      mNote((beat % 2 ? root + 7 : root) - 12, t, spb * 0.85, 0.35, 'sine');
+      if (combat) { if (beat % 2 === 0) { mNote(36, t, 0.18, 0.5, 'sine'); } else mNoise(t, 0.12, 0.22, 'bandpass', 1800); }
+    }
+    if (boss && st % 2 === 1) mNoise(t, 0.04, 0.07, 'highpass', 7000);
+    musicNext += spb / 4; musicStep++;
+  }
+}
+function toggleMusic() { musicOn = !musicOn; save.music = musicOn; writeSave(); toast(musicOn ? '🎵 Music on' : '🔇 Music off'); }
+
 function noiseBurst(vol, dur, type, f0, f1, q = 0.7) {
   const t = actx.currentTime;
   const src = actx.createBufferSource(); src.buffer = noiseBuf;
@@ -2292,6 +2403,7 @@ function sfx(name, pos) {
     case 'hit': noiseBurst(0.9 * att, 0.7, 'lowpass', 3000, 200); tone(0.6 * att, 0.3, 140, 40, 'triangle'); break;
     case 'splash': noiseBurst(0.35 * att, 0.6, 'bandpass', 1800, 500, 0.8); break;
     case 'thud': noiseBurst(0.5 * att, 0.4, 'lowpass', 800, 100); break;
+    case 'hitmark': tone(0.16, 0.07, 1500, 900, 'square'); noiseBurst(0.3, 0.12, 'bandpass', 2500, 1200, 1.2); break;
     case 'thunder': noiseBurst(1.0, 3.2, 'lowpass', 500, 40); tone(0.6, 2.5, 55, 30); break;
     case 'boom': noiseBurst(1.2 * att, 2.2, 'lowpass', 1600, 60); tone(1.1 * att, 1.2, 70, 22); break;
     case 'clang': tone(0.18 * att, 0.12, rand(1100, 1600), 700, 'square'); noiseBurst(0.25 * att, 0.15, 'highpass', 3000, 2000); break;
@@ -2329,6 +2441,41 @@ function flashDamage() {
   const d = $('dmg'); d.style.transition = 'none'; d.style.opacity = 1;
   requestAnimationFrame(() => { d.style.transition = 'opacity .5s'; d.style.opacity = 0; });
 }
+// floating damage numbers: what you deal (gold), what you take (red), burns (orange)
+const nums = [];
+let lastHitSfx = 0;
+function dmgNum(pos, key, amount, kind, prof) {
+  if (prof.id === myId) showNum(pos, key, amount, kind);
+  else emit(['d', r2(pos.x), r2(pos.y), r2(pos.z), key, Math.round(amount * 10) / 10, kind, prof.id]);
+}
+function showNum(pos, key, amount, kind) {
+  if (amount <= 0) return;
+  if (kind === 'out' && performance.now() - lastHitSfx > 90) { sfx('hitmark'); lastHitSfx = performance.now(); }
+  const ex = nums.find(n => n.key === key && n.kind === kind && n.age < 0.35);
+  if (ex) { ex.amount += amount; ex.el.textContent = (kind.startsWith('burn') ? '🔥' : '') + Math.round(ex.amount); ex.age = 0.05; return; }
+  if (nums.length > 40) { nums[0].el.remove(); nums.shift(); }
+  const el = document.createElement('div');
+  el.className = 'dnum ' + kind;
+  el.textContent = (kind.startsWith('burn') ? '🔥' : '') + Math.max(1, Math.round(amount));
+  hud.appendChild(el);
+  nums.push({ el, key, kind, amount, age: 0, pos: new THREE.Vector3(pos.x, (pos.y || 0) + 9, pos.z), dx: rand(-24, 24) });
+}
+let numClock = 0;
+function updateNums() {
+  const dt = Math.min(0.1, time - numClock); numClock = time;
+  for (let i = nums.length - 1; i >= 0; i--) {
+    const n = nums[i];
+    n.age += dt;
+    if (n.age > 1.1) { n.el.remove(); nums.splice(i, 1); continue; }
+    TV.copy(n.pos); TV.y += n.age * 6; TV.project(camera);
+    if (TV.z > 1) { n.el.style.display = 'none'; continue; }
+    n.el.style.display = 'block';
+    n.el.style.left = ((TV.x * 0.5 + 0.5) * innerWidth + n.dx) + 'px';
+    n.el.style.top = ((-TV.y * 0.5 + 0.5) * innerHeight) + 'px';
+    n.el.style.opacity = Math.min(1, 2.2 - n.age * 2);
+  }
+}
+
 function hurtFx() { shake = Math.min(1.4, shake + 0.45); flashDamage(); }
 
 // ============================================================
@@ -2365,6 +2512,7 @@ function clearEntities() {
   waveEvent = null; objective = { text: '', marker: null }; victoryShown = false;
   for (const p of profiles.values()) p.ship = null;
   timers.length = 0;
+  tut = null;
   fleet.target = null; fleet.brokenT = 0;
   wave = 0; waveClearT = -1; overPending = false; gameActive = false; shake = 0;
   camYaw = Math.PI; camPitch = 0.32; aimElev = 0.22;
@@ -2396,6 +2544,36 @@ function spawnPlayerShip(p, x, z, h = 0) {
   return s;
 }
 
+// ---------- first-voyage tutorial ----------
+const TUT = [
+  { text: 'Raise your sails with <b>W</b> (lower them with <b>S</b>)', done: () => mySail > tut.sail0 },
+  { text: 'Steer with <b>A</b> / <b>D</b>', done: () => tut.steerT > 1 },
+  { text: 'Look around with the <b>mouse</b> — or press <b>Q</b> / <b>E</b> to swing your aim to a side', done: () => Math.abs(angDiff(camYaw, tut.yaw0)) > 0.6 },
+  { text: 'Set your shot range with <b>↑</b> / <b>↓</b> — watch the yellow arc', done: () => Math.abs(aimElev - tut.elev0) > 0.06 },
+  { text: '<b>Click</b> or press <b>Space</b> to fire a broadside', done: () => me && (me.reload.port > 0 || me.reload.star > 0) },
+  { text: 'Well sailed! <b>B</b> shipwright · <b>M</b> chart · <b>C</b> signature move · <b>G</b> board crippled ships. Enemy sails on the horizon!', done: () => tut.t > 5 },
+];
+let tut = null;
+function startTutorial() { tut = { step: 0, t: 0, sail0: mySail, yaw0: camYaw, elev0: aimElev, steerT: 0 }; }
+function finishTutorial() { if (!tut) return; tut = null; save.tutDone = true; writeSave(); after(1, () => startWave(1)); }
+function updateTutorial(dt) {
+  if (!tut || state !== 'playing') return;
+  tut.t += dt;
+  if (localSteer) tut.steerT += dt;
+  if (TUT[tut.step].done()) {
+    tut.step++; tut.t = 0; tut.yaw0 = camYaw; tut.elev0 = aimElev; tut.sail0 = mySail;
+    sfx('pickup');
+    if (tut.step >= TUT.length) finishTutorial();
+  }
+}
+function updateTutorialHUD() {
+  const el = $('tutorial');
+  if (!tut) { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  const html = `<div style="opacity:.7;font-size:13px">Captain's training ${tut.step + 1}/${TUT.length} · Enter to skip</div>${TUT[tut.step].text}`;
+  if (el._h !== html) { el.innerHTML = html; el._h = html; }
+}
+
 function startMatch() {
   clearEntities();
   const n = profiles.size;
@@ -2420,7 +2598,11 @@ function startMatch() {
   clock.getDelta();
   broadcast({ t: 'start', mode: gameMode });
   runAwarded = false; awardBase = { earned: 0, wave: startWaveSel - 1, kills: 0 };
-  if (gameMode === 'coop') { announce(startWaveSel > 1 ? `Set sail — starting at wave ${startWaveSel}!` : 'Set sail, Captain!', 2); after(1.5, () => startWave(startWaveSel)); }
+  if (gameMode === 'coop') {
+    announce(startWaveSel > 1 ? `Set sail — starting at wave ${startWaveSel}!` : 'Set sail, Captain!', 2);
+    if (net.mode === 'solo' && startWaveSel === 1 && !save.tutDone) startTutorial();
+    else after(1.5, () => startWave(startWaveSel));
+  }
   else announce('Free-for-all! Sink your rivals for gold!', 3);
 }
 
@@ -3198,6 +3380,7 @@ function handleEvent(ev) {
     case 's': if (ev[2] == null || ev[2] === myId) sfx(ev[1]); break;
     case 'over': showGameOver(ev[1]); break;
     case 'vic': showVictory(ev[1]); break;
+    case 'd': if (ev[7] === myId) showNum(new THREE.Vector3(ev[1], ev[2], ev[3]), ev[4], ev[5], ev[6]); break;
   }
 }
 
@@ -3293,6 +3476,7 @@ const CONTROLS = `
     <tr><td>C</td><td>Your ship class's signature move (smoke / rapid reload / all guns)</td></tr>
     <tr><td>F / R / Shift</td><td>Abilities: powder kegs / mortar strike / speed burst</td></tr>
     <tr><td>B</td><td>Shipwright — buy upgrades &amp; repairs</td></tr>
+    <tr><td>N</td><td>Music on / off</td></tr>
     <tr><td>M</td><td>Big map of the sea (islands, shallows, reefs, forts)</td></tr>
     <tr><td>Wheel</td><td>Zoom camera</td></tr>
     <tr><td>Esc / P</td><td>Pause / menu</td></tr>
@@ -4094,6 +4278,8 @@ function updateHUD() {
   if (bigMapOpen) { drawChart(bm, 620, 0, 0, 310 / 720, 0, false); drawWindRose(bm, 60, 60, 0); }
   drawCompass();
 
+  updateNums();
+  updateTutorialHUD();
   if (shopOpen) renderShop();
 }
 
@@ -4109,6 +4295,8 @@ addEventListener('keydown', (e) => {
     return;
   }
   keys[e.code] = true;
+  if (e.code === 'Enter' && tut) { finishTutorial(); return; }
+  if (e.code === 'KeyN') { toggleMusic(); return; }
   if (e.code === 'KeyM' && (state === 'playing' || state === 'paused')) { toggleBigMap(); return; }
   if (e.code === 'KeyB' && gameActive && (state === 'playing' || shopOpen)) { shopOpen ? closeShop() : openShop(); return; }
   if (e.code === 'Escape' && shopOpen) { closeShop(); return; }
@@ -4148,7 +4336,58 @@ addEventListener('mousemove', (e) => {
   camPitch = clamp(camPitch + e.movementY * 0.002, 0.06, 1.2);
 });
 addEventListener('wheel', (e) => { camDist = clamp(camDist + e.deltaY * 0.03, 14, 80); }, { passive: true });
+// ---------- touch controls (phones & tablets) ----------
+const isTouch = matchMedia('(pointer: coarse)').matches;   // phones & tablets (not touchscreen laptops with a mouse)
+let touchSteer = 0;
+if (isTouch) {
+  document.body.classList.add('touch');
+  const stick = $('stick'), knob = $('knob');
+  let stickId = null, camId = null, camLast = null;
+  const stickMove = (t) => {
+    const r = stick.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    let dx = (t.clientX - cx) / 60, dy = (t.clientY - cy) / 60;
+    const m = Math.hypot(dx, dy); if (m > 1) { dx /= m; dy /= m; }
+    knob.style.transform = `translate(${dx * 45}px, ${dy * 45}px)`;
+    touchSteer = Math.abs(dx) > 0.2 ? -dx : 0;
+    if (dy < -0.35) mySail = Math.min(1, 0.34 + (-dy - 0.35) * 1.2); else if (dy > 0.5) mySail = 0;
+  };
+  stick.addEventListener('touchstart', (e) => { e.preventDefault(); const t = e.changedTouches[0]; stickId = t.identifier; stickMove(t); initAudio(); }, { passive: false });
+  addEventListener('touchmove', (e) => {
+    for (const t of e.changedTouches) {
+      if (t.identifier === stickId) stickMove(t);
+      else if (t.identifier === camId && camLast && state === 'playing') {
+        camYaw -= (t.clientX - camLast[0]) * 0.006; camYawTarget = null;
+        camPitch = clamp(camPitch + (t.clientY - camLast[1]) * 0.004, 0.06, 1.2);
+        camLast = [t.clientX, t.clientY];
+      }
+    }
+  }, { passive: false });
+  addEventListener('touchend', (e) => {
+    for (const t of e.changedTouches) {
+      if (t.identifier === stickId) { stickId = null; touchSteer = 0; knob.style.transform = ''; }
+      if (t.identifier === camId) { camId = null; camLast = null; }
+    }
+  });
+  canvas.addEventListener('touchstart', (e) => { const t = e.changedTouches[0]; if (camId === null) { camId = t.identifier; camLast = [t.clientX, t.clientY]; } initAudio(); }, { passive: true });
+  const act = {
+    port: () => aimOrFire('port'), star: () => aimOrFire('star'), fire: () => fireSide(aimSide()), both: fireBoth,
+    special: () => triggerAbility('special'), kegs: () => triggerAbility('kegs'), mortar: () => triggerAbility('mortar'), boost: () => triggerAbility('boost'),
+    g: actionG, shop: () => { if (gameActive) shopOpen ? closeShop() : openShop(); }, map: () => toggleBigMap(), pause: () => pause(),
+  };
+  $('tbtns').addEventListener('touchstart', (e) => {
+    const b = e.target.closest('[data-t]'); if (!b) return;
+    e.preventDefault(); initAudio();
+    const k = b.dataset.t;
+    if (k === 'up') keys.ArrowUp = true; else if (k === 'down') keys.ArrowDown = true;
+    else if (state === 'playing' || k === 'shop' || k === 'map') act[k] && act[k]();
+  }, { passive: false });
+  $('tbtns').addEventListener('touchend', (e) => { const b = e.target.closest('[data-t]'); if (b && b.dataset.t === 'up') keys.ArrowUp = false; if (b && b.dataset.t === 'down') keys.ArrowDown = false; });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+  sun.shadow.mapSize.set(1024, 1024);
+}
+
 function lockPointer() {
+  if (isTouch) return;
   try { const r = canvas.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch {}
 }
 document.addEventListener('pointerlockchange', () => {
@@ -4193,7 +4432,8 @@ function step(dt) {
   const host = net.mode !== 'guest';
   me = getMe();
   const canControl = state === 'playing' && !shopOpen && isAlive(me);
-  localSteer = canControl ? ((keys.KeyA || keys.ArrowLeft) ? 1 : 0) - ((keys.KeyD || keys.ArrowRight) ? 1 : 0) : 0;
+  localSteer = canControl ? (((keys.KeyA || keys.ArrowLeft) ? 1 : 0) - ((keys.KeyD || keys.ArrowRight) ? 1 : 0) || touchSteer) : 0;
+  updateTutorial(dt);
   if (canControl) aimElev = clamp(aimElev + ((keys.ArrowUp ? 1 : 0) - (keys.ArrowDown ? 1 : 0)) * 0.22 * dt, AIM_MIN, AIM_MAX);
   if (state === 'menu' || state === 'lobby') camYaw += dt * 0.08;
   if (camYawTarget !== null) {
@@ -4243,13 +4483,14 @@ if (location.search.includes('debug')) window.__dbg = {
   profiles, islands, reefs, forts, fleet, shallowAt, startWave, applyBuy, useAbility, triggerAbility, selectAmmo,
   gold(n) { const p = profiles.get(myId); p.gold += n; },
   wind, sailEfficiency, windFactor, startBoarding, resolveBoarding, boardCandidate,
-  get kraken() { return kraken; }, save, showQuarters, buyQuarters, giveTreasureMap, spawnMap, env, setWeather, spawnEnemyTest: spawnEnemy, get objective() { return objective; }, get waveEvent() { return waveEvent; }, eventFor,
+  get kraken() { return kraken; }, get tut() { return tut; }, finishTutorial, get musicOn() { return musicOn; }, save, showQuarters, buyQuarters, giveTreasureMap, spawnMap, env, setWeather, spawnEnemyTest: spawnEnemy, get objective() { return objective; }, get waveEvent() { return waveEvent; }, eventFor,
   applyBurnTest(s, n, per) { s.lastHitT = -99; applyBurn(s, n, per, null); },
 };
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
   const frozen = net.mode === 'solo' && (state === 'paused' || state === 'victory' || shopOpen);
   if (!frozen) step(dt);
+  updateMusic();
   renderer.render(scene, camera);
 });
 </script>
