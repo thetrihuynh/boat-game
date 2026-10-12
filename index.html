@@ -24,6 +24,7 @@
   #sailInfo { text-align: center; min-width: 140px; }
   #sails { font-size: 20px; letter-spacing: 2px; }
   #speed { font-size: 14px; opacity: .85; }
+  #range { font-size: 15px; color: #ffe28a; margin-top: 2px; }
   #minimap { position: absolute; right: 18px; bottom: 18px; border-radius: 50%; border: 3px solid #c9a45c; background: rgba(8,40,70,.6); }
   #banner { position: absolute; top: 22%; width: 100%; text-align: center; font-size: 50px; font-weight: bold; color: #ffe6a0; text-shadow: 0 4px 10px #000, 0 0 2px #000; opacity: 0; transition: opacity .4s; }
   #toast { position: absolute; top: 32%; width: 100%; text-align: center; font-size: 24px; color: #b6ffb0; text-shadow: 0 2px 6px #000; opacity: 0; transition: opacity .3s; }
@@ -79,7 +80,7 @@
   <div id="scoreboard"></div>
   <div id="bottom">
     <div class="reload" id="rPort"><span>◀ PORT (Q)</span><div class="bar"><div></div></div></div>
-    <div id="sailInfo"><div id="sails"></div><div id="speed">0 knots</div></div>
+    <div id="sailInfo"><div id="sails"></div><div id="speed">0 knots</div><div id="range"></div></div>
     <div class="reload" id="rStar"><span>STARBOARD (E) ▶</span><div class="bar"><div></div></div></div>
   </div>
   <canvas id="minimap" width="180" height="180"></canvas>
@@ -110,15 +111,22 @@ const CANNON_SETS = {
   6: [-4.8, -3.2, -1.6, 0, 1.6, 3.2],
 };
 const PEER_PREFIX = 'broadside-pirates-v1-';
-const PEER_OPTS = {
-  debug: 1,
-  config: {
-    iceServers: [
-      { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] },
-      { urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'], username: 'peerjs', credential: 'peerjsp' },
-    ],
-  },
-};
+// TURN relay (metered.ca) so players behind strict networks can still connect
+const METERED_APP = '';   // e.g. 'myapp' for myapp.metered.live
+const METERED_KEY = '';
+const STUN_SERVERS = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }];
+let iceServersPromise = null;
+function getPeerOpts() {
+  if (!iceServersPromise) {
+    iceServersPromise = (METERED_APP && METERED_KEY)
+      ? fetch(`https://${METERED_APP}.metered.live/api/v1/turn/credentials?apiKey=${encodeURIComponent(METERED_KEY)}`)
+          .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+          .then(list => [...STUN_SERVERS, ...list])
+          .catch(err => { console.warn('TURN credentials unavailable, using STUN only:', err); iceServersPromise = null; return STUN_SERVERS; })
+      : Promise.resolve(STUN_SERVERS);
+  }
+  return iceServersPromise.then(iceServers => ({ debug: 1, config: { iceServers } }));
+}
 const JOIN_TIMEOUT = 20000;
 const MAX_PLAYERS = 4;
 const REPAIR_COST = 100;
@@ -349,6 +357,8 @@ let state = 'menu';           // menu | lobby | playing | paused | over
 let shopOpen = false;
 let time = 0, wave = 0, waveClearT = -1, shake = 0;
 let camYaw = Math.PI, camPitch = 0.32, camDist = 32, camY = 4;
+const AIM_MIN = 0, AIM_MAX = 0.44;
+let aimElev = 0.22, aimRange = 0;   // cannon elevation (radians), set with the Up/Down arrows
 let mySail = 2 / 3, localSteer = 0;
 let shipSeq = 0;
 const net = { mode: 'solo', peer: null, conns: new Map(), hostConn: null, code: '', snapT: 0, inT: 0, events: [], lobby: [] };
@@ -1168,7 +1178,7 @@ function clearEntities() {
   for (const p of profiles.values()) p.ship = null;
   timers.length = 0;
   wave = 0; waveClearT = -1; overPending = false; gameActive = false; shake = 0;
-  camYaw = Math.PI; camPitch = 0.32;
+  camYaw = Math.PI; camPitch = 0.32; aimElev = 0.22;
   closeShop(true);
 }
 
@@ -1350,6 +1360,7 @@ function broadcast(msg) { for (const c of net.conns.values()) if (c.open) { try 
 function leaveNet() {
   const peer = net.peer;
   net.mode = 'solo'; net.peer = null; net.hostConn = null; net.conns.clear(); net.events = [];
+  net.token = (net.token || 0) + 1;   // invalidates any connection still being set up
   if (peer) try { peer.destroy(); } catch {}
 }
 function lobbyInfo() { return { t: 'lobby', mode: gameMode, players: [...profiles.values()].map(p => [p.name, p.colorIdx]) }; }
@@ -1363,7 +1374,12 @@ function startHost() {
   profiles.set(myId, makeProfile(myId, myName, 0));
   net.code = genCode();
   renderHostLobby('Opening a room…');
-  const peer = new Peer(PEER_PREFIX + net.code, PEER_OPTS);
+  const token = net.token;
+  getPeerOpts().then(opts => { if (token === net.token && net.mode === 'host') openHostPeer(opts); });
+}
+
+function openHostPeer(opts) {
+  const peer = new Peer(PEER_PREFIX + net.code, opts);
   net.peer = peer;
   peer.on('open', () => { if (state === 'lobby') renderHostLobby(); });
   peer.on('connection', (conn) => {
@@ -1454,7 +1470,12 @@ function startJoin(code) {
   net.mode = 'guest'; state = 'lobby'; myId = null; net.lobby = [];
   net.lastCode = code;
   renderGuestLobby(`Step 1/3: reaching the matchmaking server…`);
-  const peer = new Peer(PEER_OPTS);
+  const token = net.token;
+  getPeerOpts().then(opts => { if (token === net.token && net.mode === 'guest') openGuestPeer(opts, code); });
+}
+
+function openGuestPeer(opts, code) {
+  const peer = new Peer(opts);
   net.peer = peer;
   // never hang forever: give up with a useful message
   clearTimeout(net.joinTimer);
@@ -1602,7 +1623,8 @@ const CONTROLS = `
   <table>
     <tr><td>W / S</td><td>Raise / lower sails (speed)</td></tr>
     <tr><td>A / D</td><td>Steer port / starboard</td></tr>
-    <tr><td>Mouse</td><td>Look around &amp; aim (look lower = shoot farther)</td></tr>
+    <tr><td>Mouse</td><td>Look around &amp; choose which side to fire</td></tr>
+    <tr><td>↑ / ↓</td><td>Raise / lower the cannons (shot range)</td></tr>
     <tr><td>Click / Space</td><td>Fire the broadside you're facing</td></tr>
     <tr><td>Q / E</td><td>Fire port / starboard cannons</td></tr>
     <tr><td>B</td><td>Shipwright — buy upgrades &amp; repairs</td></tr>
@@ -1771,7 +1793,7 @@ $('shop').addEventListener('click', (e) => {
 //  Aim preview
 // ============================================================
 function aimSide() { return Math.sin(camYaw) < 0 ? 'port' : 'star'; }
-function aimElevation() { return clamp(0.44 - (camPitch - 0.08) * 0.48, 0, 0.44); }
+function aimElevation() { return aimElev; }
 
 const TRAJ_N = 90;
 const trajPos = new Float32Array(TRAJ_N * 3);
@@ -1800,6 +1822,7 @@ function updateAimPreview(t) {
   trajGeo.setDrawRange(0, n);
   trajGeo.attributes.position.needsUpdate = true;
   marker.position.set(p.x, waveHeight(p.x, p.z, t) + 0.25, p.z);
+  aimRange = Math.hypot(p.x - me.pos.x, p.z - me.pos.z);
   const ready = me.reload[side] <= 0;
   trajLine.material.color.set(ready ? 0xffe28a : 0x8a8a8a);
   marker.material.color.set(ready ? 0xffe28a : 0x8a8a8a);
@@ -1857,6 +1880,7 @@ function updateHUD() {
   const lvl = Math.round(mySail * 3);
   $('sails').textContent = 'SAILS ' + '▮'.repeat(lvl) + '▯'.repeat(3 - lvl);
   $('speed').textContent = `${((me ? me.speed : 0) * 1.2).toFixed(1)} knots`;
+  $('range').textContent = `▲▼ Range ${Math.round(aimRange)} m`;
   const side = aimSide();
   for (const [id, s] of [['rPort', 'port'], ['rStar', 'star']]) {
     const el = $(id);
@@ -1939,9 +1963,10 @@ addEventListener('keydown', (e) => {
   keys[e.code] = true;
   if (e.code === 'KeyB' && gameActive && (state === 'playing' || shopOpen)) { shopOpen ? closeShop() : openShop(); return; }
   if (e.code === 'Escape' && shopOpen) { closeShop(); return; }
+  if (state === 'playing' && e.code.startsWith('Arrow')) e.preventDefault();
   if (state !== 'playing' || shopOpen || e.repeat) return;
-  if (e.code === 'KeyW' || e.code === 'ArrowUp') mySail = Math.min(1, Math.round(mySail * 3 + 1) / 3);
-  if (e.code === 'KeyS' || e.code === 'ArrowDown') mySail = Math.max(0, Math.round(mySail * 3 - 1) / 3);
+  if (e.code === 'KeyW') mySail = Math.min(1, Math.round(mySail * 3 + 1) / 3);
+  if (e.code === 'KeyS') mySail = Math.max(0, Math.round(mySail * 3 - 1) / 3);
   if (e.code === 'KeyQ') fireSide('port');
   if (e.code === 'KeyE') fireSide('star');
   if (e.code === 'Space') { fireSide(aimSide()); e.preventDefault(); }
@@ -2007,6 +2032,7 @@ function step(dt) {
   me = getMe();
   const canControl = state === 'playing' && !shopOpen && isAlive(me);
   localSteer = canControl ? ((keys.KeyA || keys.ArrowLeft) ? 1 : 0) - ((keys.KeyD || keys.ArrowRight) ? 1 : 0) : 0;
+  if (canControl) aimElev = clamp(aimElev + ((keys.ArrowUp ? 1 : 0) - (keys.ArrowDown ? 1 : 0)) * 0.22 * dt, AIM_MIN, AIM_MAX);
   if (state === 'menu' || state === 'lobby') camYaw += dt * 0.08;
 
   if (host) {

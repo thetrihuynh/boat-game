@@ -9,7 +9,8 @@ A 3D pirate ship battle game that runs in the browser (Three.js). Sail, aim your
 |---|---|
 | W / S | Raise / lower sails |
 | A / D | Steer |
-| Mouse | Look & aim (look lower = shoot farther) |
+| Mouse | Look around & choose which side to fire |
+| ↑ / ↓ | Raise / lower cannons (shot range) |
 | Click / Space | Fire the broadside you're facing |
 | Q / E | Fire port / starboard |
 | B | Shipwright (upgrades) |
