@@ -37,6 +37,7 @@
   #banner { position: absolute; top: 22%; width: 100%; text-align: center; font-size: 50px; font-weight: bold; color: #ffe6a0; text-shadow: 0 4px 10px #000, 0 0 2px #000; opacity: 0; transition: opacity .4s; }
   #toast { position: absolute; top: 32%; width: 100%; text-align: center; font-size: 24px; color: #b6ffb0; text-shadow: 0 2px 6px #000; opacity: 0; transition: opacity .3s; }
   #aimLabel { position: absolute; transform: translate(-50%, -100%); font-size: 15px; font-weight: bold; letter-spacing: 1px; white-space: nowrap; padding: 2px 10px; border-radius: 6px; background: rgba(0,0,0,.35); text-shadow: 0 1px 3px #000; display: none; }
+  #warnTxt { position: absolute; top: 62%; width: 100%; text-align: center; font-size: 20px; text-shadow: 0 2px 5px #000; }
   #respawn { position: absolute; top: 45%; width: 100%; text-align: center; font-size: 30px; text-shadow: 0 2px 6px #000; }
   #bossbar { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); width: 440px; text-align: center; display: none; text-shadow: 0 2px 4px #000; }
   #bossbar .bar { height: 16px; border-color: #b8860b; }
@@ -116,6 +117,7 @@
   <div id="toast"></div>
   <div id="respawn"></div>
   <div id="aimLabel"></div>
+  <div id="warnTxt"></div>
 </div>
 <div id="dmg"></div>
 <div id="shop"><div class="shopbox" id="shopBox"></div></div>
@@ -282,8 +284,32 @@ ocean.receiveShadow = true;
 ocean.frustumCulled = false;
 scene.add(ocean);
 const C_DEEP = new THREE.Color(0x0b4a7a), C_MID = new THREE.Color(0x1b7db4), C_CREST = new THREE.Color(0x9bdcec);
+const C_SHALLOW = new THREE.Color(0x3cc8c0), C_BEACH = new THREE.Color(0xa6e6cf);
 
-function waveHeight(x, z, t) {
+// Shallow-water field (0 = open sea, 1 = beach), painted around islands and reefs.
+// Deep-hulled ships run aground in it; it also calms the waves and tints the water.
+const SH_CELL = 4, SH_HALF = 900, SH_N = Math.ceil(SH_HALF * 2 / SH_CELL);
+const shallowGrid = new Float32Array(SH_N * SH_N);
+function shallowAt(x, z) {
+  const i = Math.floor((x + SH_HALF) / SH_CELL), j = Math.floor((z + SH_HALF) / SH_CELL);
+  if (i < 0 || j < 0 || i >= SH_N || j >= SH_N) return 0;
+  return shallowGrid[j * SH_N + i];
+}
+function paintShallow(cx, cz, inner, outer, peak) {
+  const i0 = Math.max(0, Math.floor((cx - outer + SH_HALF) / SH_CELL)), i1 = Math.min(SH_N - 1, Math.ceil((cx + outer + SH_HALF) / SH_CELL));
+  const j0 = Math.max(0, Math.floor((cz - outer + SH_HALF) / SH_CELL)), j1 = Math.min(SH_N - 1, Math.ceil((cz + outer + SH_HALF) / SH_CELL));
+  for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+    const x = i * SH_CELL - SH_HALF + SH_CELL / 2, z = j * SH_CELL - SH_HALF + SH_CELL / 2;
+    const d = Math.hypot(x - cx, z - cz);
+    if (d >= outer) continue;
+    const f = d <= inner ? 1 : 1 - (d - inner) / (outer - inner);
+    const v = peak * f * f * (3 - 2 * f);
+    const k = j * SH_N + i;
+    if (v > shallowGrid[k]) shallowGrid[k] = v;
+  }
+}
+function waveHeight(x, z, t) { return waveBase(x, z, t) * (1 - 0.6 * shallowAt(x, z)); }
+function waveBase(x, z, t) {
   return 0.55 * Math.sin(x * 0.045 + t * 0.9)
        + 0.45 * Math.sin(z * 0.06 - t * 1.1)
        + 0.30 * Math.sin((x + z) * 0.09 + t * 1.6)
@@ -295,12 +321,20 @@ function updateOcean(t, cx, cz) {
   const p = oceanGeo.attributes.position.array, c = oceanGeo.attributes.color.array;
   const ox = ocean.position.x, oz = ocean.position.z;
   for (let i = 0; i < p.length; i += 3) {
-    const h = waveHeight(oceanBase[i] + ox, oceanBase[i + 2] + oz, t);
+    const wx = oceanBase[i] + ox, wz = oceanBase[i + 2] + oz;
+    const sh = shallowAt(wx, wz);
+    const h = waveBase(wx, wz, t) * (1 - 0.6 * sh);
     p[i + 1] = h;
     const k = clamp((h + 1.45) / 2.9, 0, 1);
     let a, b, f;
     if (k < 0.72) { a = C_DEEP; b = C_MID; f = k / 0.72; } else { a = C_MID; b = C_CREST; f = (k - 0.72) / 0.28; }
-    c[i] = a.r + (b.r - a.r) * f; c[i + 1] = a.g + (b.g - a.g) * f; c[i + 2] = a.b + (b.b - a.b) * f;
+    let r = a.r + (b.r - a.r) * f, g = a.g + (b.g - a.g) * f, bl = a.b + (b.b - a.b) * f;
+    if (sh > 0.01) {
+      const q = clamp((sh - 0.55) / 0.45, 0, 1), m = sh * 0.9;
+      const sr = C_SHALLOW.r + (C_BEACH.r - C_SHALLOW.r) * q, sg = C_SHALLOW.g + (C_BEACH.g - C_SHALLOW.g) * q, sb = C_SHALLOW.b + (C_BEACH.b - C_SHALLOW.b) * q;
+      r += (sr - r) * m; g += (sg - g) * m; bl += (sb - bl) * m;
+    }
+    c[i] = r; c[i + 1] = g; c[i + 2] = bl;
   }
   oceanGeo.attributes.position.needsUpdate = true;
   oceanGeo.attributes.color.needsUpdate = true;
@@ -414,17 +448,24 @@ function buildShip(c, isPlayer, masts = 2) {
 }
 
 const PLAYER_CSS = ['#ffd34d', '#5ab0ff', '#6fe07a', '#d98aff'];
-const ENEMY_COLORS = [
+const ENEMY_COLORS = [   // 0-3 regular, 4 veteran, 5 flagship
   { hull: 0x3a2a1e, trim: 0x8b1a1a, sail: 0xa33a2c, flag: 0xaa0000 },
   { hull: 0x2b2b33, trim: 0x2a4f9a, sail: 0xdcd3bd, flag: 0x1f3f8a },
   { hull: 0x4a3020, trim: 0x2f6a2f, sail: 0x3a3a3a, flag: 0x111111 },
   { hull: 0x5a1f1f, trim: 0xcfcfcf, sail: 0xe7c98a, flag: 0x6a1b9a },
+  { hull: 0x2a1a12, trim: 0xe0b030, sail: 0x8a1c1c, flag: 0xe0b030 },
+  { hull: 0x1d2440, trim: 0xf0c040, sail: 0xf4e3b0, flag: 0xf0c040 },
 ];
+// enemy roles: each type plays a part in the fleet's tactics
 const ENEMY_TYPES = {
-  cutter: { scale: 1, masts: 2, guns: 4, hp: 1, speed: 0, turn: 0.55, reload: 1, bounty: 1 },
-  raider: { scale: 0.8, masts: 1, guns: 3, hp: 0.6, speed: 4, turn: 0.95, reload: 0.7, bounty: 0.9 },
-  heavy:  { scale: 1.3, masts: 3, guns: 6, hp: 1.9, speed: -3, turn: 0.38, reload: 1.25, bounty: 1.7 },
+  cutter:   { role: 'line', label: '', scale: 1, masts: 2, guns: 4, hp: 1, speed: 0, turn: 0.55, reload: 1, bounty: 1, cost: 1, from: 1, weight: 3, range: [50, 70] },
+  raider:   { role: 'raider', label: 'Raider', scale: 0.8, masts: 1, guns: 3, hp: 0.6, speed: 4, turn: 0.95, reload: 0.7, bounty: 0.9, cost: 1, from: 2, weight: 2, range: [30, 42] },
+  ketch:    { role: 'ketch', label: 'Bomb Ketch', scale: 0.9, masts: 2, guns: 2, hp: 0.8, speed: -1, turn: 0.55, reload: 1.2, bounty: 1.2, cost: 1.5, from: 3, weight: 1.2, range: [110, 140] },
+  fireship: { role: 'fireship', label: '🔥 Fireship', scale: 0.85, masts: 1, guns: 0, hp: 0.5, speed: 5, turn: 0.85, reload: 1, bounty: 0.8, cost: 1, from: 4, weight: 1, range: [0, 0] },
+  heavy:    { role: 'heavy', label: 'Heavy', scale: 1.3, masts: 3, guns: 6, hp: 1.9, speed: -3, turn: 0.38, reload: 1.25, bounty: 1.7, cost: 2.5, from: 6, weight: 1.2, range: [40, 55] },
+  flagship: { role: 'flag', label: '⚑ Flagship', scale: 1.15, masts: 3, guns: 5, hp: 2.4, speed: -1.5, turn: 0.45, reload: 1, bounty: 3, cost: 3.5, from: 8, weight: 2, range: [70, 90], unique: true },
 };
+const MAX_FLEET = 11;
 const BOSS_COLORS = { hull: 0x1c1a1a, trim: 0xb8860b, sail: 0x3a0c0c, flag: 0x8b0000 };
 
 // ============================================================
@@ -486,6 +527,8 @@ class Ship {
     this.prefRange = rand(45, 70);
     this.slowT = 0; this.burnT = 0; this.burnDps = 0; this.burnBy = null; this.boostT = 0; this.burnFx = 0;
     this.regen = 0; this.regenDelay = 6; this.lastHitT = -99; this.repairing = false;
+    this.role = null; this.flank = Math.random() < 0.5 ? -1 : 1; this.slotOff = rand(-1.2, 1.2); this.losShift = 0;
+    this.mortarT = rand(3, 6); this.reloadMul = 1; this.aground = false;
     this.remote = false; this.net = null; this.profile = null; this.lastHitBy = null;
     this.pid = ''; this.name = ''; this.tag = null;
   }
@@ -564,13 +607,23 @@ class Ship {
       if (this.regen && this.hp < this.maxHp && this.burnT <= 0 && time - this.lastHitT > this.regenDelay) {
         this.hp = Math.min(this.maxHp, this.hp + this.regen * dt); this.repairing = true;
       } else this.repairing = false;
-      const vmax = this.maxSpeed * (this.slowT > 0 ? 0.6 : 1) * (this.boostT > 0 ? 1.6 : 1);
+      // deep hulls drag and scrape in shallow water; small ships (sloops, raiders) float over it
+      let drag = 1;
+      if (this.scale >= 0.95) {
+        const sh = shallowAt(this.pos.x, this.pos.z);
+        if (sh > 0.5) {
+          drag = clamp(1 - (sh - 0.5) * 2.2, 0.15, 1);
+          if (this.speed > 3.5 && this.bumpCd <= 0) { this.damage(1.5 * this.scale, null, true); this.bumpCd = 0.7; fx.dust(this.local(rand(-2, 2), 0.3, 6)); }
+        }
+      }
+      this.aground = drag < 1;
+      const vmax = this.maxSpeed * drag * (this.slowT > 0 ? 0.6 : 1) * (this.boostT > 0 ? 1.6 : 1);
       this.speed += (this.sail * vmax - this.speed) * Math.min(1, dt * (this.boostT > 0 ? 1.5 : 0.45));
       const turnEff = 0.35 + 0.65 * Math.min(1, this.speed / (this.maxSpeed * 0.6));
       this.heading += this.steer * this.turnRate * turnEff * dt;
       this.pos.addScaledVector(this.forward(), this.speed * dt);
-      this.reload.port = Math.max(0, this.reload.port - dt);
-      this.reload.star = Math.max(0, this.reload.star - dt);
+      this.reload.port = Math.max(0, this.reload.port - dt * this.reloadMul);
+      this.reload.star = Math.max(0, this.reload.star - dt * this.reloadMul);
     }
 
     // float on the waves: sample fore/aft and port/starboard
@@ -598,12 +651,13 @@ class Ship {
     }
     // status effects
     this.burnFx -= dt;
-    if (this.burnFx <= 0 && (this.burnT > 0 || this.slowT > 0)) {
+    const blazing = this.burnT > 0 || this.role === 'fireship';
+    if (this.burnFx <= 0 && (blazing || this.slowT > 0)) {
       this.burnFx = 0.07;
-      if (this.burnT > 0) { fx.fire(this.local(rand(-1.5, 1.5), 2.2, rand(-5, 5))); if (Math.random() < 0.4) fx.smoke(this.local(rand(-1, 1), 3, rand(-4, 4)), true); }
+      if (blazing) { fx.fire(this.local(rand(-1.5, 1.5), 2.2, rand(-5, 5))); if (Math.random() < 0.4) fx.smoke(this.local(rand(-1, 1), 3, rand(-4, 4)), true); }
       if (this.slowT > 0 && Math.random() < 0.3) P({ pos: this.local(rand(-2, 2), rand(6, 11), rand(-3, 3)), vel: rv(1).setY(-1), color: 0xe8dcc0, size: 0.35, life: 1.2, gravity: 4, box: true });
     }
-    if (this.boostT > 0 && this.wakeT <= 0) fx.wake(this.local(rand(-1, 1), 0.6, 7.5), rv(2).setY(rand(2, 5)), 1);
+    if (this.boostT > 0 && this.wakeT <= 0 && Math.random() < 0.5) fx.wake(this.local(rand(-1, 1), 0.6, 7.5), rv(1.5).setY(rand(1.5, 3.5)), 0.4);
     // wake
     this.wakeT -= dt;
     if (this.speed > 2 && this.wakeT <= 0 && this.pos.distanceTo(focusPos()) < 170) {
@@ -787,46 +841,88 @@ class Fort {
   }
 }
 
+const reefs = [];
 function buildIslands() {
-  const rng = mulberry32(1337);
+  const rng = mulberry32(2024);
   const M = (color) => new THREE.MeshStandardMaterial({ color, roughness: 0.95, flatShading: true });
-  const sandM = M(0xe6cf8f), grassM = M(0x3f8f3a), rockM = M(0x7a7a72), trunkM = M(0x7a5532), leafM = M(0x2f7d2a);
-  for (let n = 0; n < 16; n++) {
-    let x, z, r, tries = 0;
-    do {
-      x = (rng() - 0.5) * 1100; z = (rng() - 0.5) * 1100; r = 10 + rng() * 16; tries++;
-    } while (tries < 50 && (Math.hypot(x, z) < 100 || islands.some(o => Math.hypot(o.x - x, o.z - z) < o.r + r + 70)));
-    const isFort = n % 3 === 1 && Math.hypot(x, z) > 200;
+  const sandM = M(0xe6cf8f), grassM = M(0x3f8f3a), darkGrassM = M(0x2f7535), rockM = M(0x7a7a72), cliffM = M(0x8d877b);
+  const trunkM = M(0x7a5532), leafM = M(0x2f7d2a), woodM = M(0x6b4a2b), roofM = M(0x9a6b3a), reefRockM = M(0x5d6660);
+  const specs = [];
+  const fits = (x, z, r, pad) => !specs.some(o => Math.hypot(o.x - x, o.z - z) < o.r + r + pad) && !reefs.some(o => Math.hypot(o.x - x, o.z - z) < o.r + r + 25);
+  // inner archipelago near the start: channels and tall rocks to duck behind
+  for (let i = 0; i < 9; i++) for (let k = 0; k < 40; k++) {
+    const a = i / 9 * Math.PI * 2 + rng() * 0.5, d = 120 + rng() * 200, r = 7 + rng() * 13;
+    const x = Math.sin(a) * d, z = Math.cos(a) * d;
+    if (fits(x, z, r, 45)) { specs.push({ x, z, r, kind: rng() < 0.45 ? 'tall' : 'hill' }); break; }
+  }
+  // outer islands; a few carry forts
+  let forts_ = 0;
+  for (let i = 0; i < 18; i++) for (let k = 0; k < 40; k++) {
+    const x = (rng() - 0.5) * 1300, z = (rng() - 0.5) * 1300, r = 9 + rng() * 18;
+    if (Math.hypot(x, z) < 340 || !fits(x, z, r, 70)) continue;
+    const fort = forts_ < 5 && i % 3 === 1 && r > 11;
+    if (fort) forts_++;
+    specs.push({ x, z, r, kind: fort ? 'fort' : rng() < 0.3 ? 'tall' : 'hill' });
+    break;
+  }
+  // open-water reefs: no land, but too shallow for deep hulls
+  for (let i = 0; i < 8; i++) for (let k = 0; k < 40; k++) {
+    const a = rng() * Math.PI * 2, d = 110 + rng() * 480, r = 20 + rng() * 20;
+    const x = Math.sin(a) * d, z = Math.cos(a) * d;
+    if (fits(x, z, r, 30)) { reefs.push({ x, z, r }); break; }
+  }
+
+  const jitter = (geo, amt, keepTop) => {
+    const p = geo.attributes.position;
+    const top = Math.max(...Array.from({ length: p.count }, (_, i) => p.getY(i)));
+    for (let i = 0; i < p.count; i++) if (!keepTop || p.getY(i) < top - 0.01) { p.setX(i, p.getX(i) * (1 - amt + rng() * amt * 2)); p.setZ(i, p.getZ(i) * (1 - amt + rng() * amt * 2)); }
+    geo.computeVertexNormals();
+    return geo;
+  };
+  for (const sp of specs) {
+    const { x, z, r, kind } = sp;
     const g = new THREE.Group(); g.position.set(x, 0, z);
-    const sand = new THREE.Mesh(new THREE.CylinderGeometry(r * 1.05, r * 1.35, 3, 14), sandM);
+    const sand = new THREE.Mesh(jitter(new THREE.CylinderGeometry(r * 1.05, r * 1.35, 3, 16), 0.08, false), sandM);
     sand.position.y = -0.4;
     g.add(sand);
     let hh = 1;
-    if (isFort) {
+    if (kind === 'fort') {
       const plateau = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.9, r * 0.98, 1.2, 14), grassM);
       plateau.position.y = 1.4;
       g.add(plateau);
+    } else if (kind === 'tall') {
+      // craggy mountain: grassy skirt with a rocky peak — tall enough to hide a ship behind
+      hh = r * (1.4 + rng() * 0.7);
+      const skirt = new THREE.Mesh(jitter(new THREE.ConeGeometry(r * 0.9, hh * 0.45, 11, 2), 0.12, true), darkGrassM);
+      skirt.position.y = 1 + hh * 0.225;
+      const peak = new THREE.Mesh(jitter(new THREE.ConeGeometry(r * 0.62, hh, 9, 4), 0.22, true), cliffM);
+      peak.position.set(rng() * 2 - 1, 1 + hh / 2, rng() * 2 - 1);
+      g.add(skirt, peak);
     } else {
-      hh = r * (0.5 + rng() * 0.6);
-      const hillGeo = new THREE.ConeGeometry(r * 0.82, hh, 10, 3);
-      const hp = hillGeo.attributes.position;
-      for (let i = 0; i < hp.count; i++) if (hp.getY(i) < hh / 2 - 0.01) { hp.setX(i, hp.getX(i) * (0.85 + rng() * 0.3)); hp.setZ(i, hp.getZ(i) * (0.85 + rng() * 0.3)); }
-      hillGeo.computeVertexNormals();
-      const hill = new THREE.Mesh(hillGeo, grassM); hill.position.y = 1 + hh / 2;
+      hh = r * (0.5 + rng() * 0.45);
+      const hill = new THREE.Mesh(jitter(new THREE.ConeGeometry(r * 0.82, hh, 10, 3), 0.15, true), grassM);
+      hill.position.y = 1 + hh / 2;
       g.add(hill);
+      if (rng() < 0.45) {   // fisherman's hut
+        const a = rng() * Math.PI * 2, hut = new THREE.Group();
+        hut.position.set(Math.sin(a) * r * 0.75, 1.1, Math.cos(a) * r * 0.75); hut.rotation.y = a;
+        const body = new THREE.Mesh(new THREE.BoxGeometry(3, 2.2, 3), woodM); body.position.y = 1.1;
+        const roof = new THREE.Mesh(new THREE.ConeGeometry(2.6, 1.8, 4), roofM); roof.position.y = 3.1; roof.rotation.y = Math.PI / 4;
+        hut.add(body, roof); g.add(hut);
+      }
     }
-    for (let i = 0; i < 4; i++) {
-      const a = rng() * Math.PI * 2, rs = r * (0.2 + rng() * 0.2);
+    for (let i = 0, nr = 4 + Math.floor(rng() * 4); i < nr; i++) {
+      const a = rng() * Math.PI * 2, rs = r * (0.12 + rng() * 0.2), d = r * (1.05 + rng() * 0.35);
       const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(rs, 0), rockM);
-      rock.position.set(Math.sin(a) * r * 1.0, 0.5, Math.cos(a) * r * 1.0);
+      rock.position.set(Math.sin(a) * d, 0.2, Math.cos(a) * d);
       rock.rotation.set(rng() * 3, rng() * 3, rng() * 3);
       g.add(rock);
     }
-    const palms = 2 + Math.floor(rng() * 3);
+    const palms = kind === 'tall' ? 1 + Math.floor(rng() * 2) : 2 + Math.floor(rng() * 3);
     for (let i = 0; i < palms; i++) {
       const a = rng() * Math.PI * 2;
       const palm = new THREE.Group();
-      palm.position.set(Math.sin(a) * r * 0.85, 1, Math.cos(a) * r * 0.85);
+      palm.position.set(Math.sin(a) * r * 0.9, 1, Math.cos(a) * r * 0.9);
       palm.rotation.set((rng() - 0.5) * 0.4, rng() * 6, (rng() - 0.5) * 0.4);
       const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.4, 7, 6), trunkM); trunk.position.y = 3.5;
       palm.add(trunk);
@@ -841,9 +937,26 @@ function buildIslands() {
     }
     g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     scene.add(g);
-    const isl = { x, z, r: r * 1.2, h: isFort ? 2 : hh + 1 };
+    const isl = { x, z, r: r * 1.2, h: kind === 'fort' ? 2 : hh + 1, kind };
+    isl.shallowR = isl.r + 14 + isl.r * 0.6;
     islands.push(isl);
-    if (isFort) forts.push(new Fort(isl, forts.length, clamp(r * 0.55, 5.5, 9)));
+    paintShallow(x, z, isl.r, isl.shallowR, 1);
+    if (kind === 'fort') forts.push(new Fort(isl, forts.length, clamp(r * 0.55, 5.5, 9)));
+  }
+  // reefs: a few overlapping shallow blobs and rocks breaking the surface
+  for (const rf of reefs) {
+    for (let b = 0; b < 4; b++) {
+      const a = rng() * Math.PI * 2, o = rng() * rf.r * 0.4, rr = rf.r * (0.55 + rng() * 0.3);
+      paintShallow(rf.x + Math.sin(a) * o, rf.z + Math.cos(a) * o, rr * 0.6, rr + 10, 0.85);
+    }
+    for (let i = 0, n = 10 + Math.floor(rng() * 8); i < n; i++) {
+      const a = rng() * Math.PI * 2, d = Math.sqrt(rng()) * rf.r * 0.9;
+      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.7 + rng() * 1.6, 0), reefRockM);
+      rock.position.set(rf.x + Math.sin(a) * d, -0.2 + rng() * 0.7, rf.z + Math.cos(a) * d);
+      rock.rotation.set(rng() * 3, rng() * 3, rng() * 3);
+      rock.castShadow = true;
+      scene.add(rock);
+    }
   }
 }
 buildIslands();
@@ -908,7 +1021,7 @@ const fx = {
     P({ pos, vel: rv(0.6).addScaledVector(UP, rand(2, 4)), color: Math.random() < 0.5 ? 0xff7a10 : 0xffc040, size: rand(0.4, 0.8), life: rand(0.3, 0.6), grow: -0.6, basic: true });
   },
   trail(pos) { P({ pos, color: 0xbbbbbb, size: 0.22, life: 0.45, grow: 0.8, opacity: 0.5 }); },
-  wake(pos, vel, sp) { P({ pos, vel, color: 0xf2fbff, size: 0.35 + sp * 0.4, life: 1.8, grow: 1.1, drag: 1, opacity: 0.55, basic: true }); },
+  wake(pos, vel, sp) { P({ pos, vel, color: 0xf2fbff, size: 0.25 + sp * 0.25, life: 1.5, grow: 0.7, drag: 1, opacity: 0.4, basic: true }); },
 };
 function fxHit(p, sc = 1) {
   fx.explosion(p.clone(), sc);
@@ -1148,12 +1261,108 @@ function nearestOfTeam(team, x, z, maxD = Infinity) {
   return best;
 }
 
+// Fleet coordination: a shared focus target, a rotating "ring" the line ships hold around it,
+// the flagship's reload aura, and morale collapse when the flagship sinks.
+const fleet = { angle: 0, target: null, retargetT: 0, brokenT: 0, flag: null };
+function updateFleet(dt) {
+  fleet.angle += dt * 0.06;
+  fleet.brokenT = Math.max(0, fleet.brokenT - dt);
+  fleet.retargetT -= dt;
+  const foes = ships.filter(s => teamOf(s) === 'E' && isAlive(s));
+  if (!foes.length) return;
+  if (fleet.retargetT <= 0 || !isAlive(fleet.target)) {
+    fleet.retargetT = 5;
+    const c = new THREE.Vector3();
+    foes.forEach(f => c.add(f.pos)); c.divideScalar(foes.length);
+    let best = null, bs = Infinity;
+    for (const s of ships) {
+      if (teamOf(s) !== 'P' || !isAlive(s) || s === menuShip) continue;
+      // focus the weakest nearby captain; escorts are a lower priority
+      const score = (s.hp / s.maxHp) * 120 + Math.hypot(s.pos.x - c.x, s.pos.z - c.z) * 0.5 + (s.kind === 'a' ? 60 : 0);
+      if (score < bs) { bs = score; best = s; }
+    }
+    fleet.target = best;
+  }
+  fleet.flag = foes.find(s => s.role === 'flag') || null;
+  for (const e of foes) {
+    let m = 1;
+    if (fleet.flag && e !== fleet.flag && Math.hypot(e.pos.x - fleet.flag.pos.x, e.pos.z - fleet.flag.pos.z) < 80) m *= 1.35;
+    if (fleet.brokenT > 0) m *= 0.65;
+    e.reloadMul = m;
+  }
+}
+
+// tall land between two points blocks a flat cannon shot
+function losBlocked(ax, az, bx, bz) {
+  const dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz || 1;
+  for (const isl of islands) {
+    if (isl.h < 4) continue;
+    const u = ((isl.x - ax) * dx + (isl.z - az) * dz) / L2;
+    if (u <= 0.05 || u >= 0.95) continue;
+    const px = ax + dx * u - isl.x, pz = az + dz * u - isl.z;
+    if (px * px + pz * pz < (isl.r * 0.85) ** 2) return true;
+  }
+  return false;
+}
+
+// telegraphed mortar barrage (boss and bomb ketches) — arcs right over islands
+function enemyMortar(e, tgt, n, spread, dmg, T = 2.6) {
+  const tf = tgt.forward();
+  const cx = tgt.pos.x + tf.x * tgt.speed * T * 0.85, cz = tgt.pos.z + tf.z * tgt.speed * T * 0.85;
+  for (let i = 0; i < n; i++) {
+    const tx = cx + (i ? rand(-spread, spread) : 0), tz = cz + (i ? rand(-spread, spread) : 0);
+    const delay = i * 0.18;
+    warnAt(tx, tz, T + delay);
+    after(delay, () => {
+      if (!isAlive(e)) return;
+      const from = e.local(0, 4, -2);
+      const vel = new THREE.Vector3((tx - from.x) / T, (0 - from.y + 0.5 * G * T * T) / T, (tz - from.z) / T);
+      spawnBall(from, vel, e, { aoe: 7, dmg });
+      fx.muzzle(from, vel.clone().normalize());
+      sfx('cannon', from);
+    });
+  }
+}
+
+function fireshipExplode(e) {
+  const p = e.pos.clone().setY(1.5);
+  fxHit(p, 3);
+  for (const s of ships) {
+    if (!canHit(e, s) || Math.hypot(s.pos.x - p.x, s.pos.z - p.z) > 13 * s.scale) continue;
+    s.damage(e.dmg * 3.5, e);
+    s.burnT = 4; s.burnDps = e.dmg * 0.4; s.burnBy = e;
+  }
+  e.selfDestruct = true;
+  e.hp = 0;
+  e.startSinking();
+}
+
+// steer away from land, and (for deep hulls) shallows and reefs
+function avoidObstacles(e, desired) {
+  const sc = e.scale, deep = sc >= 0.95;
+  const check = (x, z, R) => {
+    const ix = x - e.pos.x, iz = z - e.pos.z, d = Math.hypot(ix, iz);
+    if (d < R) {
+      const a = Math.atan2(ix, iz), diff = angDiff(a, e.heading);
+      if (Math.abs(diff) < 1.3) desired = a - Math.sign(diff || 1) * 1.7;
+    }
+  };
+  for (const isl of islands) check(isl.x, isl.z, (deep ? isl.r + (isl.shallowR - isl.r) * 0.55 : isl.r) + 22 * sc);
+  if (deep) for (const rf of reefs) check(rf.x, rf.z, rf.r + 6 + 22 * sc);
+  return desired;
+}
+
 function updateAI(e, dt) {
   if (!isAlive(e)) return;
-  const sc = e.scale;
-  const ally = e.kind === 'a';
-  const tgt = ally ? nearestOfTeam('E', e.pos.x, e.pos.z, 220) : nearestPlayerShip(e.pos.x, e.pos.z);
-  let desired, dx = 0, dz = 0, dist = Infinity;
+  const sc = e.scale, ally = e.kind === 'a', role = e.role || 'line';
+  let tgt;
+  if (ally) tgt = nearestOfTeam('E', e.pos.x, e.pos.z, 220);
+  else {
+    tgt = isAlive(fleet.target) ? fleet.target : nearestPlayerShip(e.pos.x, e.pos.z);
+    const near = role !== 'fireship' && nearestPlayerShip(e.pos.x, e.pos.z, 40 * sc);   // fight back at close range
+    if (near) tgt = near;
+  }
+  let desired, dx = 0, dz = 0, dist = Infinity, blocked = false;
   const lead = ally && e.ownerProf && isAlive(e.ownerProf.ship) ? e.ownerProf.ship : null;
   if (!tgt && lead) {
     // escort with nothing to fight: keep station beside its captain
@@ -1167,26 +1376,41 @@ function updateAI(e, dt) {
   else {
     dx = tgt.pos.x - e.pos.x; dz = tgt.pos.z - e.pos.z; dist = Math.hypot(dx, dz);
     const toT = Math.atan2(dx, dz);
-    if (dist > e.prefRange + 30) { desired = toT; e.sail = 1; }
-    else if (dist < 26 * sc) { desired = toT + Math.PI; e.sail = 1; }
-    else {
-      // swing broadside-on, adjusting to hold preferred range
-      const a1 = toT + Math.PI / 2, a2 = toT - Math.PI / 2;
-      const useA1 = Math.abs(angDiff(a1, e.heading)) < Math.abs(angDiff(a2, e.heading));
-      const adj = clamp((dist - e.prefRange) / 40, -0.5, 0.5);
-      desired = useA1 ? a1 - adj : a2 + adj;
-      e.sail = 2 / 3;
+    blocked = losBlocked(e.pos.x, e.pos.z, tgt.pos.x, tgt.pos.z);
+    if (role === 'fireship') {
+      // charge, leading the target, and blow up alongside
+      const f = tgt.forward(), T = Math.min(3, dist / Math.max(4, e.speed));
+      desired = Math.atan2(tgt.pos.x + f.x * tgt.speed * T - e.pos.x, tgt.pos.z + f.z * tgt.speed * T - e.pos.z);
+      e.sail = 1;
+      if (dist < 6 * (sc + tgt.scale)) { fireshipExplode(e); return; }
+    } else {
+      // take up a station around the target according to role
+      let slot;
+      if (ally) slot = Math.atan2(e.pos.x - tgt.pos.x, e.pos.z - tgt.pos.z);
+      else if (role === 'raider') slot = tgt.heading + Math.PI + e.flank * 0.5;   // rake from astern, outside the broadside arcs
+      else if (role === 'heavy') slot = tgt.heading + e.flank * 0.4;              // park across the bow
+      else if (role === 'ketch') slot = fleet.angle + Math.PI + e.flank * 0.3;    // hang back on the far side
+      else slot = fleet.angle + e.slotOff;                                        // line ships spread around the target
+      slot += e.losShift;
+      const gx = tgt.pos.x + Math.sin(slot) * e.prefRange, gz = tgt.pos.z + Math.cos(slot) * e.prefRange;
+      const gd = Math.hypot(gx - e.pos.x, gz - e.pos.z);
+      if (dist < 22 * sc) { desired = toT + Math.PI; e.sail = 1; }
+      else if (gd > 28 * sc) { desired = Math.atan2(gx - e.pos.x, gz - e.pos.z); e.sail = gd > 70 ? 1 : 2 / 3; }
+      else {
+        // on station: swing broadside-on, adjusting to hold range
+        const a1 = toT + Math.PI / 2, a2 = toT - Math.PI / 2;
+        const useA1 = Math.abs(angDiff(a1, e.heading)) < Math.abs(angDiff(a2, e.heading));
+        const adj = clamp((dist - e.prefRange) / 40, -0.5, 0.5);
+        desired = useA1 ? a1 - adj : a2 + adj;
+        e.sail = role === 'raider' ? 2 / 3 : 0.5;
+      }
+      // land in the way: work around it toward a clear firing line
+      if (blocked && role !== 'ketch') e.losShift += dt * 0.45 * e.flank;
+      else e.losShift *= Math.max(0, 1 - dt * 0.05);
     }
   }
-  // steer around islands
-  for (const isl of islands) {
-    const ix = isl.x - e.pos.x, iz = isl.z - e.pos.z, d = Math.hypot(ix, iz);
-    if (d < isl.r + 35 * sc) {
-      const a = Math.atan2(ix, iz), diff = angDiff(a, e.heading);
-      if (Math.abs(diff) < 1.3) desired = a - Math.sign(diff || 1) * 1.7;
-    }
-  }
-  // keep some distance from other AI ships
+  desired = avoidObstacles(e, desired);
+  // keep some distance from friendly ships
   for (const o of ships) {
     if (o === e || o.kind === 'p' || teamOf(o) !== teamOf(e) || o.sinking) continue;
     const ox = o.pos.x - e.pos.x, oz = o.pos.z - e.pos.z, d = Math.hypot(ox, oz);
@@ -1198,8 +1422,8 @@ function updateAI(e, dt) {
   e.steer = clamp(angDiff(desired, e.heading) * 2, -1, 1);
   if (!tgt) return;
 
-  // broadside when the target is abeam
-  if (dist < 115) {
+  // broadside when the target is abeam and no land is in the way
+  if (dist < 115 && !blocked && e.cannonZ.length) {
     for (const side of ['port', 'star']) {
       if (e.reload[side] > 0) continue;
       const sd = e.sideDir(side);
@@ -1214,26 +1438,12 @@ function updateAI(e, dt) {
     }
   }
 
-  // boss: telegraphed mortar barrage
-  if (e.kind === 'b') {
-    e.mortarT -= dt;
-    if (e.mortarT <= 0 && dist < 170) {
-      e.mortarT = rand(6, 8);
-      const T = 2.6, tf = tgt.forward();
-      const cx = tgt.pos.x + tf.x * tgt.speed * T * 0.85, cz = tgt.pos.z + tf.z * tgt.speed * T * 0.85;
-      for (let i = 0; i < 5; i++) {
-        const tx = cx + (i ? rand(-13, 13) : 0), tz = cz + (i ? rand(-13, 13) : 0);
-        const delay = i * 0.18;
-        warnAt(tx, tz, T + delay);
-        after(delay, () => {
-          if (!isAlive(e)) return;
-          const from = e.local(0, 4, -2);
-          const vel = new THREE.Vector3((tx - from.x) / T, (0 - from.y + 0.5 * G * T * T) / T, (tz - from.z) / T);
-          spawnBall(from, vel, e, { aoe: 7, dmg: e.dmg + 4 });
-          fx.muzzle(from, vel.clone().normalize());
-          sfx('cannon', from);
-        });
-      }
+  // mortars arc over islands, so hiding is never completely safe
+  if (e.kind === 'b' || role === 'ketch') {
+    e.mortarT -= dt * e.reloadMul;
+    if (e.mortarT <= 0 && dist < 175) {
+      if (e.kind === 'b') { e.mortarT = rand(6, 8); enemyMortar(e, tgt, 5, 13, e.dmg + 4); }
+      else { e.mortarT = rand(6.5, 8.5); enemyMortar(e, tgt, 3, 9, e.dmg + 2); }
     }
   }
 }
@@ -1349,6 +1559,7 @@ function clearEntities() {
   for (const f of forts) f.reset();
   for (const p of profiles.values()) p.ship = null;
   timers.length = 0;
+  fleet.target = null; fleet.brokenT = 0;
   wave = 0; waveClearT = -1; overPending = false; gameActive = false; shake = 0;
   camYaw = Math.PI; camPitch = 0.32; aimElev = 0.22;
   closeShop(true);
@@ -1398,12 +1609,27 @@ function startMatch() {
   else announce('Free-for-all! Sink your rivals for gold!', 3);
 }
 
-function spawnPoint(center, dmin, dmax) {
-  let x, z, tries = 0;
-  do {
-    const a = rand(0, Math.PI * 2), d = rand(dmin, dmax);
-    x = center.x + Math.sin(a) * d; z = center.z + Math.cos(a) * d; tries++;
-  } while (tries < 30 && islands.some(o => Math.hypot(o.x - x, o.z - z) < o.r + 25));
+// pick a fleet for wave n from a growing points budget; new ship types unlock as waves go on
+function buildFleetList(n, budget) {
+  const list = [];
+  let flagUsed = false, guard = 0;
+  while (budget >= 1 && list.length < MAX_FLEET && guard++ < 200) {
+    const opts = Object.values(ENEMY_TYPES).filter(t => n >= t.from && t.cost <= budget && !(t.unique && flagUsed));
+    if (!opts.length) break;
+    let r = Math.random() * opts.reduce((a, t) => a + t.weight, 0), pick = opts[0];
+    for (const t of opts) { r -= t.weight; if (r <= 0) { pick = t; break; } }
+    list.push(pick); budget -= pick.cost;
+    if (pick.unique) flagUsed = true;
+  }
+  return list;
+}
+
+function clearSpot(x, z, deep) {
+  for (let k = 0; k < 12; k++) {
+    const bad = islands.some(o => Math.hypot(o.x - x, o.z - z) < (deep ? o.shallowR : o.r + 12)) || (deep && reefs.some(o => Math.hypot(o.x - x, o.z - z) < o.r + 12));
+    if (!bad) break;
+    x += rand(-25, 25); z += rand(-25, 25);
+  }
   return [x, z];
 }
 
@@ -1416,48 +1642,74 @@ function startWave(n) {
   const extra = Math.max(0, profiles.size - 1);
   const isBoss = n % 5 === 0;
   const k = n / 5;
-  const count = isBoss ? Math.min(k, 3) + extra : Math.min(1 + Math.ceil(n * 0.75), 7) + extra;
-  for (let i = 0; i < count; i++) {
-    const [x, z] = spawnPoint(center, 170, 230);
-    const ci = Math.floor(Math.random() * ENEMY_COLORS.length);
-    const roll = Math.random();
-    const type = n >= 6 && roll < 0.2 ? ENEMY_TYPES.heavy : n >= 3 && roll < 0.45 ? ENEMY_TYPES.raider : ENEMY_TYPES.cutter;
+  const budget = (1.2 + n * 1.25 + extra * 2) * (isBoss ? 0.5 : 1);
+  const list = buildFleetList(n, budget);
+
+  // the whole fleet arrives together from one direction, in formation
+  const a = rand(0, Math.PI * 2);
+  const dir = new THREE.Vector3(Math.sin(a), 0, Math.cos(a)), perp = new THREE.Vector3(Math.cos(a), 0, -Math.sin(a));
+  fleet.angle = a; fleet.target = null; fleet.retargetT = 0; fleet.brokenT = 0;
+  const line = list.filter(t => t.role === 'line').length;
+  let li = 0, vets = 0;
+  list.forEach((type, i) => {
+    let fwd = 0, lat = (i - (list.length - 1) / 2) * 22;
+    if (type.role === 'heavy' || type.role === 'flag') fwd = -25;
+    if (type.role === 'ketch') fwd = 40;
+    if (type.role === 'raider') lat = (i % 2 ? 1 : -1) * rand(60, 90);
+    if (type.role === 'fireship') { fwd = -40; lat = (i % 2 ? 1 : -1) * rand(20, 50); }
+    let x = center.x + dir.x * (220 + fwd) + perp.x * lat, z = center.z + dir.z * (220 + fwd) + perp.z * lat;
+    [x, z] = clearSpot(x, z, type.scale >= 0.95);
+    const veteran = n >= 7 && type.role !== 'fireship' && Math.random() < Math.min(0.5, 0.08 + 0.025 * (n - 7));
+    if (veteran) vets++;
+    const ci = type.role === 'flag' ? 5 : veteran ? 4 : Math.floor(Math.random() * 4);
     const e = new Ship({
       kind: 'e', colors: ENEMY_COLORS[ci], colorIdx: ci, scale: type.scale, masts: type.masts, cannons: type.guns,
       x, z, heading: Math.atan2(center.x - x, center.z - z),
-      maxHp: Math.round((45 + n * 12) * type.hp),
+      maxHp: Math.round((45 + n * 12) * type.hp * (veteran ? 1.35 : 1)),
       maxSpeed: Math.min(13.5, 9.5 + n * 0.5) + type.speed,
       turnRate: type.turn,
       reloadTime: Math.max(1.9, 3.6 - n * 0.2) * type.reload,
-      aimErr: Math.max(0.025, 0.11 - n * 0.012),
-      dmg: 9 + 0.6 * n,               // enemy shots hit harder every wave
+      aimErr: Math.max(0.025, 0.11 - n * 0.012) * (veteran ? 0.5 : 1),
+      dmg: (9 + 0.6 * n) * (veteran ? 1.2 : 1),          // enemy shots hit harder every wave
     });
-    e.bounty = type.bounty; e.aiType = type;
-    if (type === ENEMY_TYPES.raider) e.prefRange = rand(32, 45);
+    e.aiType = type; e.role = type.role; e.bounty = type.bounty * (veteran ? 1.5 : 1);
+    e.name = veteran ? '★ ' + (type.label || 'Veteran') : type.label;
+    e.prefRange = rand(type.range[0], type.range[1]);
+    if (type.role === 'line') { e.slotOff = line > 1 ? (li / (line - 1) - 0.5) * 2.6 : 0; li++; }
+    e.flank = i % 2 ? 1 : -1;
     e.speed = e.maxSpeed * 0.5;
     ships.push(e);
-  }
+  });
+
   if (isBoss) {
-    const [x, z] = spawnPoint(center, 200, 240);
+    const [x, z] = clearSpot(center.x + dir.x * 245, center.z + dir.z * 245, true);
     const boss = new Ship({
       kind: 'b', colors: BOSS_COLORS, masts: 3, x, z, heading: Math.atan2(center.x - x, center.z - z),
       scale: BOSS_SCALE, cannons: 6, maxHp: 450 + 200 * (k - 1) + 120 * extra, maxSpeed: 9.5,
-      reloadTime: 2.4, aimErr: 0.04, turnRate: 0.4, dmg: 12,
+      reloadTime: 2.4, aimErr: 0.04, turnRate: 0.4, dmg: 12 + 0.6 * n,
     });
     boss.name = BOSS_NAMES[(k - 1) % BOSS_NAMES.length];
-    boss.mortarT = 6; boss.prefRange = rand(65, 85); boss.speed = 5;
+    boss.mortarT = 6; boss.prefRange = rand(65, 85); boss.speed = 5; boss.role = 'heavy';
     ships.push(boss);
     announce(`⚠ BOSS: ${boss.name} ⚠`, 3.5);
     sfxFor('boss');
   } else {
-    announce(`Wave ${n} — ${count} ship${count > 1 ? 's' : ''} approach!`);
+    announce(`Wave ${n} — ${list.length} ships approach!`);
     sfxFor('bell');
   }
+  // tell captains what is coming
+  const counts = {};
+  for (const t of list) if (t.label) counts[t.label] = (counts[t.label] || 0) + 1;
+  const parts = Object.entries(counts).map(([l, c]) => `${c} ${l}`);
+  if (vets) parts.push(`${vets} ★ veteran${vets > 1 ? 's' : ''}`);
+  if (parts.length) after(2.8, () => notify('Spotted: ' + parts.join(' · ')));
 }
 
 function onShipSunk(s) {
   const killer = s.lastHitBy && s.lastHitBy.profile;
   if (s.kind === 'a') { notify('Your escort has been sunk!', s.ownerProf); spawnCrates(s.pos, 1); return; }
+  if (s.selfDestruct) return;   // fireships that blew themselves up pay nothing
+  if (s.role === 'flag') { fleet.brokenT = 12; announce('Flagship sunk — the enemy crews lose heart!', 3); }
   if (s.kind === 'p') {
     const prof = s.profile;
     if (!prof) return;
@@ -1705,7 +1957,7 @@ function buildSnapshot() {
     s: ships.filter(s => !s.dead && s !== menuShip).map(s => [
       s.id, s.kind, r2(s.pos.x), r2(s.pos.z), r2(s.heading), r2(s.speed), r2(s.sail),
       Math.ceil(s.hp), s.maxHp, s.sinking ? 1 : 0, s.colorIdx, s.cannonCount,
-      r2(s.reload.port), r2(s.reload.star), r2(s.reloadTime), s.pid, s.name, s.design ? designArr(s.design) : s.aiType ? ['ai', s.aiType.scale, s.aiType.masts] : 0,
+      r2(s.reload.port), r2(s.reload.star), r2(s.reloadTime), s.pid, s.name, s.design ? designArr(s.design) : s.aiType ? ['ai', s.aiType.scale, s.aiType.masts, s.role] : 0,
       (s.burnT > 0 ? 1 : 0) | (s.slowT > 0 ? 2 : 0) | (s.boostT > 0 ? 4 : 0) | (s.repairing ? 8 : 0)]),
     f: forts.map(f => [Math.ceil(f.hp), f.destroyed ? 1 : 0, r2(f.aim)]),
     c: crates.map(c => [c.id, r2(c.x), r2(c.z)]),
@@ -1844,6 +2096,7 @@ function applySnapshot(m) {
     if (s.dead) continue;
     s.net = { x, z, h, sp };
     s.sail = sail; s.maxHp = maxHp;
+    if (des && des[0] === 'ai') s.role = des[3];
     s.burnT = fl & 1 ? 0.3 : 0; s.slowT = fl & 2 ? 0.3 : 0; s.boostT = fl & 4 ? 0.3 : 0; s.repairing = !!(fl & 8);
     if (pid === myId && hp < s.hp - 0.5) hurtFx();
     s.hp = hp;
@@ -2393,6 +2646,12 @@ function updateHUD() {
     el.classList.toggle('aim', side === s);
     el.querySelector('.bar > div').style.width = (me ? clamp(1 - me.reload[s] / me.reloadTime, 0, 1) * 100 : 0) + '%';
   }
+  // shallow-water hints
+  const wt = $('warnTxt');
+  const shNow = isAlive(me) ? shallowAt(me.pos.x, me.pos.z) : 0;
+  if (shNow > 0.5 && me.scale >= 0.95) { wt.textContent = '⚠ Running aground — your deep hull is scraping the shallows!'; wt.style.color = '#ffb070'; }
+  else if (shNow > 0.5) { wt.textContent = '🌊 Shallows — deep-hulled ships can’t follow you here'; wt.style.color = '#9ff0e6'; }
+  else wt.textContent = '';
   // respawn countdown
   const rs = $('respawn');
   if (prof && prof.respawnT > 0 && !isAlive(me) && gameActive) rs.textContent = `Respawning in ${Math.ceil(prof.respawnT)}…`;
@@ -2406,7 +2665,7 @@ function updateHUD() {
     const frac = s.hp / s.maxHp;
     if (s.kind === 'a') updateTag(s, s.pos.x, s.pos.y + 15, s.pos.z, s.ownerProf === myProf() ? 'Escort' : s.name, frac, '#6fe07a');
     else if (s.kind === 'p') updateTag(s, s.pos.x, s.pos.y + 17, s.pos.z, s.name, frac, gameMode === 'pvp' ? '#e2412f' : PLAYER_CSS[s.colorIdx % 4]);
-    else updateTag(s, s.pos.x, s.pos.y + 17 * s.scale, s.pos.z, s.kind === 'b' ? s.name : '', frac, '#e2412f');
+    else updateTag(s, s.pos.x, s.pos.y + 17 * s.scale, s.pos.z, s.name || '', frac, s.role === 'flag' || s.colorIdx === 4 ? '#ffc040' : '#e2412f');
   }
   for (const f of forts) {
     if (f.destroyed || !gameActive) removeTag(f);
@@ -2437,6 +2696,9 @@ function updateHUD() {
     const right = -(dx * Math.cos(h) - dz * Math.sin(h));
     return [R + right * S, R - fwd * S];
   };
+  mm.fillStyle = 'rgba(70,210,200,.35)';
+  for (const isl of islands) { const [x, y] = toMap(isl.x, isl.z); mm.beginPath(); mm.arc(x, y, isl.shallowR * S, 0, Math.PI * 2); mm.fill(); }
+  for (const rf of reefs) { const [x, y] = toMap(rf.x, rf.z); mm.beginPath(); mm.arc(x, y, rf.r * S, 0, Math.PI * 2); mm.fill(); }
   mm.fillStyle = '#d9c27a';
   for (const isl of islands) { const [x, y] = toMap(isl.x, isl.z); mm.beginPath(); mm.arc(x, y, Math.max(2, isl.r * S), 0, Math.PI * 2); mm.fill(); }
   for (const f of forts) { const [x, y] = toMap(f.x, f.z); mm.fillStyle = f.destroyed ? '#666' : '#ff8a20'; mm.fillRect(x - 4, y - 4, 8, 8); }
@@ -2552,6 +2814,7 @@ function step(dt) {
     if (mp) { mp.input.steer = localSteer; mp.input.sail = mySail; }
     for (const p of profiles.values()) if (isAlive(p.ship)) { p.ship.steer = p.input.steer; p.ship.sail = p.input.sail; }
     if (gameActive) {
+      updateFleet(dt);
       for (const s of ships) if (s.kind !== 'p') updateAI(s, dt);   // enemies and escorts
       hostLogic(dt);
     }
@@ -2576,6 +2839,12 @@ function step(dt) {
 
 const clock = new THREE.Clock();
 showMainMenu();
+// test hook (only with ?debug in the URL)
+if (location.search.includes('debug')) window.__dbg = {
+  get state() { return state; }, get wave() { return wave; }, get ships() { return ships; }, get me() { return me; },
+  profiles, islands, reefs, forts, fleet, shallowAt, startWave, applyBuy, useAbility, triggerAbility, selectAmmo,
+  gold(n) { const p = profiles.get(myId); p.gold += n; },
+};
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
   const frozen = net.mode === 'solo' && (state === 'paused' || shopOpen);
