@@ -33,7 +33,15 @@
   #sails { font-size: 20px; letter-spacing: 2px; }
   #speed { font-size: 14px; opacity: .85; }
   #range { font-size: 15px; color: #ffe28a; margin-top: 2px; }
-  #minimap { position: absolute; right: 18px; bottom: 18px; border-radius: 50%; border: 3px solid #c9a45c; background: rgba(8,40,70,.6); }
+  #minimap { position: absolute; right: 18px; bottom: 18px; border-radius: 50%; border: 3px solid #c9a45c; background: #0e3e68; box-shadow: 0 4px 14px rgba(0,0,0,.5); }
+  #mmLegend { position: absolute; right: 18px; bottom: 250px; width: 226px; display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: 12px; text-shadow: 0 1px 3px #000; background: rgba(20,12,4,.45); padding: 6px 8px; border-radius: 8px; }
+  #mmLegend i { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+  #mmLegend b { display: inline-block; width: 11px; margin-right: 6px; font-size: 11px; text-align: center; }
+  #bigmapWrap { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(5,20,35,.5); pointer-events: none; }
+  #bigmapBox { padding: 10px; background: rgba(40,24,10,.9); border: 3px solid #c9a45c; border-radius: 12px; }
+  #bigmapTitle { text-align: center; font-size: 20px; color: #ffd977; margin-bottom: 6px; }
+  #bigmapTitle span { font-size: 13px; color: #f6e7c1; opacity: .7; }
+  #bigmap { display: block; border-radius: 8px; }
   #banner { position: absolute; top: 22%; width: 100%; text-align: center; font-size: 50px; font-weight: bold; color: #ffe6a0; text-shadow: 0 4px 10px #000, 0 0 2px #000; opacity: 0; transition: opacity .4s; }
   #toast { position: absolute; top: 32%; width: 100%; text-align: center; font-size: 24px; color: #b6ffb0; text-shadow: 0 2px 6px #000; opacity: 0; transition: opacity .3s; }
   #aimLabel { position: absolute; transform: translate(-50%, -100%); font-size: 15px; font-weight: bold; letter-spacing: 1px; white-space: nowrap; padding: 2px 10px; border-radius: 6px; background: rgba(0,0,0,.35); text-shadow: 0 1px 3px #000; display: none; }
@@ -112,7 +120,14 @@
     <div id="sailInfo"><div id="sails"></div><div id="speed">0 knots</div><div id="range"></div></div>
     <div class="reload" id="rStar"><span>STARBOARD (E) ▶</span><div class="bar"><div></div></div></div>
   </div>
-  <canvas id="minimap" width="180" height="180"></canvas>
+  <canvas id="minimap" width="220" height="220"></canvas>
+  <div id="mmLegend">
+    <span><i style="background:#3f8f3a"></i>Island</span><span><i style="background:#8d877b"></i>Tall rock (cover)</span>
+    <span><i style="background:#3cc8c0"></i>Shallows</span><span><i style="background:#2a9d9a;border:1px dashed #a6e6cf"></i>Reef</span>
+    <span><i style="background:#ff8a20"></i>Fort</span><span><b style="color:#ff4a3a">▲</b>Enemy</span><span><b style="color:#6fe07a">▲</b>Ally</span>
+    <span style="opacity:.75">[M] big map</span>
+  </div>
+  <div id="bigmapWrap"><div id="bigmapBox"><div id="bigmapTitle">Chart of the Sea <span>— press M to close</span></div><canvas id="bigmap" width="620" height="620"></canvas></div></div>
   <div id="banner"></div>
   <div id="toast"></div>
   <div id="respawn"></div>
@@ -489,6 +504,8 @@ let time = 0, wave = 0, waveClearT = -1, shake = 0;
 let camYaw = Math.PI, camPitch = 0.32, camDist = 32, camY = 4;
 const AIM_MIN = 0, AIM_MAX = 0.44;
 let aimElev = 0.22, aimRange = 0;   // cannon elevation (radians), set with the Up/Down arrows
+let camYawTarget = null;            // set by Q/E to swing the view (and aim) over one broadside
+const SIDE_VIEW_YAW = 2.2;          // over-the-shoulder angle; negative = port, positive = starboard
 let mySail = 2 / 3, localSteer = 0;
 let shipSeq = 0;
 const net = { mode: 'solo', peer: null, conns: new Map(), hostConn: null, code: '', snapT: 0, inT: 0, events: [], lobby: [] };
@@ -949,10 +966,12 @@ function buildIslands() {
       const a = rng() * Math.PI * 2, o = rng() * rf.r * 0.4, rr = rf.r * (0.55 + rng() * 0.3);
       paintShallow(rf.x + Math.sin(a) * o, rf.z + Math.cos(a) * o, rr * 0.6, rr + 10, 0.85);
     }
+    rf.rocks = [];
     for (let i = 0, n = 10 + Math.floor(rng() * 8); i < n; i++) {
       const a = rng() * Math.PI * 2, d = Math.sqrt(rng()) * rf.r * 0.9;
       const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.7 + rng() * 1.6, 0), reefRockM);
       rock.position.set(rf.x + Math.sin(a) * d, -0.2 + rng() * 0.7, rf.z + Math.cos(a) * d);
+      rf.rocks.push([rock.position.x, rock.position.z]);
       rock.rotation.set(rng() * 3, rng() * 3, rng() * 3);
       rock.castShadow = true;
       scene.add(rock);
@@ -960,6 +979,99 @@ function buildIslands() {
   }
 }
 buildIslands();
+
+// Pre-render a chart of the sea from the real terrain: depth shading from the shallow-water
+// field, then beaches, grass, rocky peaks and reef rocks drawn on top.
+const CHART_PX = SH_N * 2;
+const chart = (() => {
+  const lo = document.createElement('canvas'); lo.width = lo.height = SH_N;
+  const lctx = lo.getContext('2d'), img = lctx.createImageData(SH_N, SH_N);
+  const deep = [14, 62, 104], shal = [60, 200, 192], beach = [166, 230, 207];
+  for (let k = 0; k < SH_N * SH_N; k++) {
+    const sh = shallowGrid[k], q = clamp((sh - 0.55) / 0.45, 0, 1);
+    for (let c = 0; c < 3; c++) {
+      const sc = shal[c] + (beach[c] - shal[c]) * q;
+      img.data[k * 4 + c] = deep[c] + (sc - deep[c]) * Math.min(1, sh * 1.15);
+    }
+    img.data[k * 4 + 3] = 255;
+  }
+  lctx.putImageData(img, 0, 0);
+  const cv = document.createElement('canvas'); cv.width = cv.height = CHART_PX;
+  const g = cv.getContext('2d');
+  g.imageSmoothingEnabled = true;
+  g.drawImage(lo, 0, 0, CHART_PX, CHART_PX);
+  const k = CHART_PX / (SH_HALF * 2), P = (v) => (v + SH_HALF) * k;
+  const disc = (x, z, r, col) => { g.fillStyle = col; g.beginPath(); g.arc(P(x), P(z), Math.max(1, r * k), 0, Math.PI * 2); g.fill(); };
+  for (const rf of reefs) {
+    g.strokeStyle = 'rgba(166,230,207,.55)'; g.setLineDash([3, 3]); g.lineWidth = 1;
+    g.beginPath(); g.arc(P(rf.x), P(rf.z), (rf.r + 4) * k, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
+    for (const [x, z] of rf.rocks) disc(x, z, 1.6, '#3e4a46');
+  }
+  for (const isl of islands) {
+    disc(isl.x, isl.z, isl.r, '#e6cf8f');
+    if (isl.kind === 'tall') { disc(isl.x, isl.z, isl.r * 0.78, '#2f7535'); disc(isl.x, isl.z, isl.r * 0.5, '#8d877b'); disc(isl.x, isl.z, isl.r * 0.2, '#b8b2a6'); }
+    else disc(isl.x, isl.z, isl.r * 0.75, '#3f8f3a');
+    g.strokeStyle = 'rgba(60,40,20,.6)'; g.lineWidth = 1;
+    g.beginPath(); g.arc(P(isl.x), P(isl.z), isl.r * k, 0, Math.PI * 2); g.stroke();
+  }
+  return cv;
+})();
+
+// Draw the chart plus live markers. h = heading that points "up" (minimap rotates with the ship).
+function drawChart(ctx, W, cx, cz, S, h, rim) {
+  const R = W / 2, cs = Math.cos(h), sn = Math.sin(h);
+  const a = -S * cs, c = S * sn, b = -S * sn, d = -S * cs, e = R - a * cx - c * cz, f = R - b * cx - d * cz;
+  const toScreen = (x, z) => [a * x + c * z + e, b * x + d * z + f];
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#0e3e68'; ctx.fillRect(0, 0, W, W);
+  ctx.save();
+  if (rim) { ctx.beginPath(); ctx.arc(R, R, R - 1, 0, Math.PI * 2); ctx.clip(); }
+  ctx.setTransform(a, b, c, d, e, f);
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(chart, -SH_HALF, -SH_HALF, SH_HALF * 2, SH_HALF * 2);
+  // live markers are drawn in screen space so they stay crisp
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  for (const fo of forts) {
+    const [x, y] = toScreen(fo.x, fo.z);
+    ctx.fillStyle = fo.destroyed ? '#666' : '#ff8a20'; ctx.strokeStyle = '#2a1606'; ctx.lineWidth = 1.5;
+    ctx.fillRect(x - 4.5, y - 4.5, 9, 9); ctx.strokeRect(x - 4.5, y - 4.5, 9, 9);
+  }
+  ctx.fillStyle = '#ffd34d';
+  for (const cr of crates) { const [x, y] = toScreen(cr.x, cr.z); ctx.beginPath(); ctx.arc(x, y, 2.2, 0, Math.PI * 2); ctx.fill(); }
+  ctx.fillStyle = '#ff3020';
+  for (const kg of kegs) { const [x, y] = toScreen(kg.x, kg.z); ctx.fillRect(x - 1.5, y - 1.5, 3, 3); }
+  const arrow = (s, col, size) => {
+    const [x, y] = toScreen(s.pos.x, s.pos.z);
+    const f = s.forward(), [tx, ty] = toScreen(s.pos.x + f.x, s.pos.z + f.z);
+    const ang = Math.atan2(ty - y, tx - x);
+    ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
+    ctx.beginPath(); ctx.moveTo(size, 0); ctx.lineTo(-size * 0.75, size * 0.6); ctx.lineTo(-size * 0.4, 0); ctx.lineTo(-size * 0.75, -size * 0.6); ctx.closePath();
+    ctx.fillStyle = col; ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.restore();
+    return [x, y];
+  };
+  const offscreen = [];
+  for (const s of ships) {
+    if (s === me || s.dead) continue;
+    const col = s.sinking ? '#555' : s.kind === 'a' ? '#6fe07a' : s.kind === 'p' ? (gameMode === 'pvp' ? '#ff4a3a' : PLAYER_CSS[s.colorIdx % 4])
+      : s.role === 'flag' ? '#ffc040' : s.role === 'fireship' ? '#ff9a20' : s.kind === 'b' ? '#ff2020' : '#ff4a3a';
+    const [x, y] = arrow(s, col, s.kind === 'b' ? 9 : 5.5 * Math.max(0.85, s.scale));
+    if (rim && Math.hypot(x - R, y - R) > R - 6 && teamOf(s) === 'E' && !s.sinking) offscreen.push([x, y, col]);
+  }
+  if (me) arrow(me, '#ffffff', 7.5);
+  if (rim) {
+    // range ring (about max cannon range) and markers on the rim for enemies beyond the map
+    ctx.strokeStyle = 'rgba(255,255,255,.22)'; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.arc(R, R, 100 * S, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    for (const [x, y, col] of offscreen) {
+      const ang = Math.atan2(y - R, x - R), px = R + Math.cos(ang) * (R - 7), py = R + Math.sin(ang) * (R - 7);
+      ctx.save(); ctx.translate(px, py); ctx.rotate(ang);
+      ctx.beginPath(); ctx.moveTo(5, 0); ctx.lineTo(-3, 4); ctx.lineTo(-3, -4); ctx.closePath();
+      ctx.fillStyle = col; ctx.fill(); ctx.restore();
+    }
+  }
+  ctx.restore();
+}
 
 // ============================================================
 //  Particles / effects
@@ -2144,10 +2256,11 @@ const CONTROLS = `
     <tr><td>Mouse</td><td>Look around &amp; choose which side to fire</td></tr>
     <tr><td>↑ / ↓</td><td>Raise / lower the cannons (shot range)</td></tr>
     <tr><td>Click / Space</td><td>Fire the broadside you're facing</td></tr>
-    <tr><td>Q / E</td><td>Fire port / starboard cannons</td></tr>
+    <tr><td>Q / E</td><td>Swing aim to port / starboard — press again to fire</td></tr>
     <tr><td>1 – 4</td><td>Switch ammo (once unlocked at the shipwright)</td></tr>
     <tr><td>F / R / Shift</td><td>Abilities: powder kegs / mortar strike / speed burst</td></tr>
     <tr><td>B</td><td>Shipwright — buy upgrades &amp; repairs</td></tr>
+    <tr><td>M</td><td>Big map of the sea (islands, shallows, reefs, forts)</td></tr>
     <tr><td>Wheel</td><td>Zoom camera</td></tr>
     <tr><td>Esc / P</td><td>Pause / menu</td></tr>
   </table>`;
@@ -2160,6 +2273,7 @@ function setOverlay(html, cls = '') {
 }
 
 function showMainMenu(msg = '') {
+  toggleBigMap(false);
   leaveNet();
   state = 'menu';
   if (document.pointerLockElement) document.exitPointerLock();
@@ -2569,6 +2683,12 @@ function triggerAbility(k) {
   else useAbility(prof, k, ax, az);
 }
 
+// Q/E: first press swings the view and aim to that broadside; pressing again (once aimed) fires
+function aimOrFire(side) {
+  if (aimSide() === side && camYawTarget === null) { fireSide(side); return; }
+  camYawTarget = side === 'port' ? -SIDE_VIEW_YAW : SIDE_VIEW_YAW;
+}
+
 function fireSide(side) {
   if (!isAlive(me) || me === menuShip) return;
   const elev = aimElevation();
@@ -2603,7 +2723,9 @@ function updateTag(ent, wx, wy, wz, label, frac, color) {
 }
 function removeTag(ent) { if (ent.tag) { ent.tag.remove(); ent.tag = null; } }
 
-const mm = $('minimap').getContext('2d');
+const mm = $('minimap').getContext('2d'), bm = $('bigmap').getContext('2d');
+let bigMapOpen = false;
+function toggleBigMap(v = !bigMapOpen) { bigMapOpen = v; $('bigmapWrap').style.display = v ? 'flex' : 'none'; }
 function updateHUD() {
   const prof = myProf();
   const hp = isAlive(me) ? me.hp / me.maxHp : 0;
@@ -2684,36 +2806,10 @@ function updateHUD() {
     sb.innerHTML = list.map(p => `<div style="color:${PLAYER_CSS[p.colorIdx % 4]}"><span>${esc(p.name)}</span><span>${gameMode === 'pvp' ? p.kills + ' ☠ · ' : ''}${p.earned} 💰</span></div>`).join('');
   } else sb.style.display = 'none';
 
-  // minimap (rotates with the ship, bow is up)
-  const W = 180, R = 90, S = R / 260;
-  const fp = focusPos(), h = me ? me.heading : 0;
-  mm.clearRect(0, 0, W, W);
-  mm.save();
-  mm.beginPath(); mm.arc(R, R, R - 2, 0, Math.PI * 2); mm.clip();
-  const toMap = (x, z) => {
-    const dx = x - fp.x, dz = z - fp.z;
-    const fwd = dx * Math.sin(h) + dz * Math.cos(h);
-    const right = -(dx * Math.cos(h) - dz * Math.sin(h));
-    return [R + right * S, R - fwd * S];
-  };
-  mm.fillStyle = 'rgba(70,210,200,.35)';
-  for (const isl of islands) { const [x, y] = toMap(isl.x, isl.z); mm.beginPath(); mm.arc(x, y, isl.shallowR * S, 0, Math.PI * 2); mm.fill(); }
-  for (const rf of reefs) { const [x, y] = toMap(rf.x, rf.z); mm.beginPath(); mm.arc(x, y, rf.r * S, 0, Math.PI * 2); mm.fill(); }
-  mm.fillStyle = '#d9c27a';
-  for (const isl of islands) { const [x, y] = toMap(isl.x, isl.z); mm.beginPath(); mm.arc(x, y, Math.max(2, isl.r * S), 0, Math.PI * 2); mm.fill(); }
-  for (const f of forts) { const [x, y] = toMap(f.x, f.z); mm.fillStyle = f.destroyed ? '#666' : '#ff8a20'; mm.fillRect(x - 4, y - 4, 8, 8); }
-  mm.fillStyle = '#ffd34d';
-  for (const c of crates) { const [x, y] = toMap(c.x, c.z); mm.fillRect(x - 2, y - 2, 4, 4); }
-  for (const s of ships) {
-    if (s === me || s.dead) continue;
-    const [x, y] = toMap(s.pos.x, s.pos.z);
-    mm.fillStyle = s.sinking ? '#555' : s.kind === 'a' ? '#6fe07a' : s.kind === 'p' ? (gameMode === 'pvp' ? '#ff4a3a' : PLAYER_CSS[s.colorIdx % 4]) : '#ff4a3a';
-    mm.beginPath(); mm.arc(clamp(x, 6, W - 6), clamp(y, 6, W - 6), s.kind === 'b' ? 7 : 4, 0, Math.PI * 2); mm.fill();
-  }
-  mm.strokeStyle = 'rgba(255,255,255,.2)'; mm.beginPath(); mm.arc(R, R, 100 * S, 0, Math.PI * 2); mm.stroke();
-  mm.fillStyle = '#fff';
-  mm.beginPath(); mm.moveTo(R, R - 8); mm.lineTo(R + 5, R + 6); mm.lineTo(R - 5, R + 6); mm.closePath(); mm.fill();
-  mm.restore();
+  // minimap: rotates with the ship (bow up); M opens the full chart
+  const fp = focusPos();
+  drawChart(mm, 220, fp.x, fp.z, 110 / 280, me ? me.heading : 0, true);
+  if (bigMapOpen) drawChart(bm, 620, 0, 0, 310 / 720, 0, false);
 
   if (shopOpen) renderShop();
 }
@@ -2730,6 +2826,7 @@ addEventListener('keydown', (e) => {
     return;
   }
   keys[e.code] = true;
+  if (e.code === 'KeyM' && (state === 'playing' || state === 'paused')) { toggleBigMap(); return; }
   if (e.code === 'KeyB' && gameActive && (state === 'playing' || shopOpen)) { shopOpen ? closeShop() : openShop(); return; }
   if (e.code === 'Escape' && shopOpen) { closeShop(); return; }
   if (state === 'playing' && e.code.startsWith('Arrow')) e.preventDefault();
@@ -2740,8 +2837,8 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyF') triggerAbility('kegs');
   if (e.code === 'KeyR') triggerAbility('mortar');
   if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') triggerAbility('boost');
-  if (e.code === 'KeyQ') fireSide('port');
-  if (e.code === 'KeyE') fireSide('star');
+  if (e.code === 'KeyQ') aimOrFire('port');
+  if (e.code === 'KeyE') aimOrFire('star');
   if (e.code === 'Space') { fireSide(aimSide()); e.preventDefault(); }
   if (e.code === 'KeyP') pause();
 });
@@ -2757,6 +2854,7 @@ addEventListener('mousemove', (e) => {
   if (state !== 'playing' || shopOpen) return;
   if (!document.pointerLockElement && !mouseDown) return;
   camYaw -= e.movementX * 0.0028;
+  if (e.movementX) camYawTarget = null;   // the mouse takes over again
   camPitch = clamp(camPitch + e.movementY * 0.002, 0.06, 1.2);
 });
 addEventListener('wheel', (e) => { camDist = clamp(camDist + e.deltaY * 0.03, 14, 80); }, { passive: true });
@@ -2808,6 +2906,11 @@ function step(dt) {
   localSteer = canControl ? ((keys.KeyA || keys.ArrowLeft) ? 1 : 0) - ((keys.KeyD || keys.ArrowRight) ? 1 : 0) : 0;
   if (canControl) aimElev = clamp(aimElev + ((keys.ArrowUp ? 1 : 0) - (keys.ArrowDown ? 1 : 0)) * 0.22 * dt, AIM_MIN, AIM_MAX);
   if (state === 'menu' || state === 'lobby') camYaw += dt * 0.08;
+  if (camYawTarget !== null) {
+    const dYaw = angDiff(camYawTarget, camYaw);
+    camYaw += dYaw * Math.min(1, dt * 9);
+    if (Math.abs(dYaw) < 0.03) { camYaw = camYawTarget; camYawTarget = null; }
+  }
 
   if (host) {
     const mp = profiles.get(myId);
