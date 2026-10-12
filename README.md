@@ -1,6 +1,6 @@
 # Broadside! — Pirate Ship Battle
 
-A 3D pirate ship battle game that runs in the browser (Three.js). Sail, aim your broadsides, and sink waves of enemy ships, boss galleons, and island forts. Spend plunder on upgrades, and play online with up to 4 friends (co-op or PvP) using a room code.
+A 3D pirate ship battle game that runs in the browser (Three.js). Sail, aim your broadsides, and sink waves of enemy ships, boss galleons, and island forts. Design your own ship in the Shipyard — a nimble Sloop, a balanced Frigate, or a huge Man-o'-War — and paint its hull, trim and sails. Spend plunder on upgrades, and play online with up to 4 friends (co-op or PvP) using a room code.
 
 **Play:** open `index.html`, or visit the GitHub Pages site for this repo.
 

@@ -41,6 +41,22 @@
   .tag .ebar > div { height: 100%; }
   #dmg { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 45%, rgba(200,0,0,.55)); opacity: 0; transition: opacity .35s; }
   #overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(5,20,35,.55); }
+  #overlay.side { justify-content: flex-start; padding-left: 3vw; background: linear-gradient(90deg, rgba(5,20,35,.6), transparent 60%); }
+  .classes { display: flex; gap: 10px; justify-content: center; margin: 10px 0 14px; }
+  .cls { width: 178px; padding: 10px; text-align: left; border: 2px solid #6b4a20; border-radius: 10px; background: rgba(0,0,0,.3); cursor: pointer; }
+  .cls:hover { border-color: #c9a45c; }
+  .cls.sel { border-color: #ffd977; background: rgba(255,217,119,.12); box-shadow: 0 0 12px rgba(255,217,119,.35); }
+  .cls .cn { font-size: 19px; color: #ffd977; }
+  .cls .ct { font-size: 13px; font-style: italic; opacity: .8; margin-bottom: 6px; }
+  .stat { display: flex; align-items: center; gap: 6px; font-size: 12px; margin: 2px 0; }
+  .stat span { width: 62px; opacity: .85; }
+  .stat i { flex: 1; height: 7px; background: rgba(0,0,0,.45); border-radius: 4px; overflow: hidden; }
+  .stat i b { display: block; height: 100%; background: linear-gradient(90deg, #c98a1a, #ffd977); }
+  .cdesc { font-size: 14px; opacity: .85; margin: 4px 0 10px; min-height: 38px; }
+  .swrow { display: flex; align-items: center; justify-content: center; gap: 4px; margin: 6px 0; }
+  .swrow > span { width: 60px; text-align: right; margin-right: 8px; }
+  .sw { width: 30px; height: 30px; padding: 0; margin: 0 2px; border-radius: 50%; border: 3px solid rgba(0,0,0,.4); box-shadow: none; cursor: pointer; }
+  .sw.sel { border-color: #fff; transform: scale(1.12); }
   #panel, .shopbox { text-align: center; max-width: 640px; max-height: 94vh; overflow: auto; padding: 30px 40px; background: rgba(40,24,10,.9); border: 3px solid #c9a45c; border-radius: 14px; box-shadow: 0 10px 40px rgba(0,0,0,.6); }
   #panel h1 { margin: 0 0 6px; font-size: 54px; color: #ffd977; text-shadow: 0 4px 0 #6b3d10; }
   #panel h2 { margin: 0 0 16px; font-weight: normal; font-style: italic; opacity: .85; }
@@ -105,7 +121,33 @@ import * as THREE from 'three';
 const G = 20;              // gravity for cannonballs
 const BALL_SPEED = 55;
 const BOSS_SCALE = 1.8;
+const SHIP_CLASSES = {
+  sloop: { name: 'Sloop', tag: 'Small, fast & agile',
+    desc: 'A nimble single-masted raider. Turns on a doubloon and reloads fast, but carries light guns and a thin hull.',
+    scale: 0.78, masts: 1, hp: 70, speed: 19, turn: 1.15, guns: 3, dmg: 9, reload: 1.7, spread: 0.022 },
+  frigate: { name: 'Frigate', tag: 'Balanced — the historical warship',
+    desc: 'The classic two-masted fighting ship of the age of sail: a sound mix of speed and armour, with well-drilled, accurate gun crews.',
+    scale: 1, masts: 2, hp: 110, speed: 15, turn: 0.75, guns: 4, dmg: 10, reload: 2.4, spread: 0.01 },
+  manowar: { name: "Man-o'-War", tag: 'Huge, slow & heavily armed',
+    desc: 'A three-masted floating fortress. Massive hull and a devastating broadside, but slow to sail and clumsy to turn.',
+    scale: 1.35, masts: 3, hp: 190, speed: 10.5, turn: 0.48, guns: 6, dmg: 14, reload: 3.2, spread: 0.02 },
+};
+const HULL_COLORS = [0x6b4226, 0x3a2a1e, 0x3d4f63, 0x5a1f1f, 0x2f4a33, 0x1c1a1a];
+const TRIM_COLORS = [0xd4a017, 0xcfcfcf, 0x5ab0ff, 0xc0302a, 0x55c060, 0xd070ff];
+const SAIL_COLORS = [0xf3ead2, 0xffffff, 0x2a2a2a, 0xa33a2c, 0x3c6fb0, 0xe7c98a];
+const DEFAULT_DESIGN = { cls: 'frigate', hull: 0, trim: 0, sail: 0 };
+function cleanDesign(d) {
+  d = d || {};
+  const idx = (v, n) => Number.isInteger(v) && v >= 0 && v < n ? v : 0;
+  return { cls: SHIP_CLASSES[d.cls] ? d.cls : 'frigate', hull: idx(d.hull, HULL_COLORS.length), trim: idx(d.trim, TRIM_COLORS.length), sail: idx(d.sail, SAIL_COLORS.length) };
+}
+function designColors(d) { return { hull: HULL_COLORS[d.hull], trim: TRIM_COLORS[d.trim], sail: SAIL_COLORS[d.sail] }; }
+function designArr(d) { return [d.cls, d.hull, d.trim, d.sail]; }
+function designFromArr(a) { return cleanDesign(Array.isArray(a) ? { cls: a[0], hull: a[1], trim: a[2], sail: a[3] } : null); }
+let myDesign = cleanDesign((() => { try { return JSON.parse(localStorage.getItem('broadsideDesign')); } catch { return null; } })());
+
 const CANNON_SETS = {
+  3: [-2.2, -0.2, 1.8],
   4: [-3, -1, 1, 3],
   5: [-4.2, -2.4, -0.6, 1.2, 3],
   6: [-4.8, -3.2, -1.6, 0, 1.6, 3.2],
@@ -131,7 +173,7 @@ const JOIN_TIMEOUT = 20000;
 const MAX_PLAYERS = 4;
 const REPAIR_COST = 100;
 const UPGRADES = {
-  armor:   { icon: '🛡', name: 'Reinforced Hull', desc: '+25 max hull', max: 5, cost: [150, 250, 400, 600, 850] },
+  armor:   { icon: '🛡', name: 'Reinforced Hull', desc: '+25% max hull', max: 5, cost: [150, 250, 400, 600, 850] },
   guns:    { icon: '💥', name: 'Heavy Shot', desc: '+20% cannon damage', max: 5, cost: [200, 320, 480, 700, 950] },
   reload:  { icon: '⏱', name: 'Drilled Gun Crews', desc: '-12% reload time', max: 5, cost: [150, 260, 400, 580, 800] },
   sails:   { icon: '⛵', name: 'Silk Sails', desc: '+10% speed & turning', max: 5, cost: [120, 220, 350, 520, 750] },
@@ -274,7 +316,7 @@ function jollyRogerTexture() {
 }
 const JOLLY_ROGER = jollyRogerTexture();
 
-function buildShip(c, isPlayer) {
+function buildShip(c, isPlayer, masts = 2) {
   const group = new THREE.Group();
   const M = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.85, flatShading: true, ...extra });
   const hullM = M(c.hull), deckM = M(0xa07a4c), trimM = M(c.trim, { roughness: 0.5, metalness: 0.3 });
@@ -310,25 +352,30 @@ function buildShip(c, isPlayer) {
       sails.push({ mesh: s, top, h: sh });
     }
   };
-  mast(2.6, 11, [5.6, 3.8, 6.4], [4.2, 3.0, 10.0]);
-  mast(-1.4, 13.5, [6.6, 4.4, 7.0], [5.0, 3.4, 11.2]);
-  add(new THREE.CylinderGeometry(0.65, 0.5, 0.5, 10), woodM, 0, 12.3, -1.4);
+  let mainZ = -1.4, mainH = 13.5;
+  if (masts === 1) {
+    mainZ = 0.6; mainH = 14;
+    mast(mainZ, mainH, [8.0, 5.2, 8.2], [5.8, 3.6, 12.2]);
+  } else if (masts === 3) {
+    mainZ = 0.2;
+    mast(3.6, 10.5, [5.0, 3.4, 6.2], [3.8, 2.7, 9.4]);
+    mast(mainZ, mainH, [6.6, 4.4, 7.0], [5.0, 3.4, 11.2]);
+    mast(-3.6, 10, [4.6, 3.0, 6.6], [3.4, 2.4, 9.2]);
+  } else {
+    mast(2.6, 11, [5.6, 3.8, 6.4], [4.2, 3.0, 10.0]);
+    mast(mainZ, mainH, [6.6, 4.4, 7.0], [5.0, 3.4, 11.2]);
+  }
+  add(new THREE.CylinderGeometry(0.65, 0.5, 0.5, 10), woodM, 0, mainH - 1.2, mainZ);
 
   // flag
   const flagGeo = new THREE.PlaneGeometry(2.2, 1.45, 4, 1).translate(1.1, 0, 0);
   const flagM = isPlayer
     ? new THREE.MeshStandardMaterial({ map: JOLLY_ROGER, side: THREE.DoubleSide, roughness: 0.9 })
     : M(c.flag, { side: THREE.DoubleSide });
-  const flag = add(flagGeo, flagM, 0, 14.3, -1.4, 0, Math.PI / 2, 0);
+  const flag = add(flagGeo, flagM, 0, mainH + 0.8, mainZ, 0, Math.PI / 2, 0);
   return { group, sails, flag, ironM };
 }
 
-const PLAYER_COLORS = [
-  { hull: 0x6b4226, trim: 0xd4a017, sail: 0xf3ead2 },
-  { hull: 0x3d4f63, trim: 0x5ab0ff, sail: 0xd6ecff },
-  { hull: 0x4f3a2a, trim: 0x55c060, sail: 0xe8f0c8 },
-  { hull: 0x5a2f4a, trim: 0xd070ff, sail: 0xf2dcf0 },
-];
 const PLAYER_CSS = ['#ffd34d', '#5ab0ff', '#6fe07a', '#d98aff'];
 const ENEMY_COLORS = [
   { hull: 0x3a2a1e, trim: 0x8b1a1a, sail: 0xa33a2c, flag: 0xaa0000 },
@@ -373,11 +420,12 @@ function isAlive(s) { return s && !s.sinking && !s.dead; }
 class Ship {
   constructor(o) {
     const { kind = 'e', colors, colorIdx = 0, x = 0, z = 0, heading = 0, scale = 1, cannons = 4,
-            maxHp = 100, maxSpeed = 12, reloadTime = 2.6, aimErr = 0.08, turnRate = 0.55, dmg = 9, id } = o;
+            maxHp = 100, maxSpeed = 12, reloadTime = 2.6, aimErr = 0.08, turnRate = 0.55, dmg = 9, id, masts = 2, spread = 0.018 } = o;
     this.id = id || ('s' + (++shipSeq));
     Object.assign(this, { kind, colorIdx, scale, maxHp, hp: maxHp, maxSpeed, reloadTime, aimErr, turnRate, dmg });
     this.isPlayer = kind === 'p';
-    const b = buildShip(colors, this.isPlayer);
+    this.spread = spread;
+    const b = buildShip(colors, this.isPlayer, masts);
     this.mesh = b.group; this.sails = b.sails; this.flag = b.flag; this.ironM = b.ironM;
     this.mesh.scale.setScalar(scale);
     this.cannonMeshes = [];
@@ -401,7 +449,7 @@ class Ship {
     for (const m of this.cannonMeshes) this.mesh.remove(m);
     this.cannonMeshes = [];
     this.cannonCount = n;
-    this.cannonZ = CANNON_SETS[n] || CANNON_SETS[4];
+    this.cannonZ = CANNON_SETS[n] || Array.from({ length: n }, (_, i) => -5.2 + 8.6 * i / (n - 1));
     for (const cz of this.cannonZ) for (const sx of [2.45, -2.45]) {
       const m = new THREE.Mesh(CANNON_GEO, this.ironM);
       m.position.set(sx, 1.05, cz); m.castShadow = true;
@@ -409,15 +457,17 @@ class Ship {
     }
   }
   applyStats(prof) {
-    const u = prof.up;
-    const newMax = 100 + 25 * u.armor, gain = newMax - this.maxHp;
+    // class base stats, improved by upgrades
+    const u = prof.up, b = SHIP_CLASSES[prof.design.cls];
+    const newMax = Math.round(b.hp * (1 + 0.25 * u.armor)), gain = newMax - this.maxHp;
     this.maxHp = newMax;
     if (gain > 0) this.hp += gain;
-    this.dmg = 10 * (1 + 0.2 * u.guns);
-    this.reloadTime = 2.4 * Math.pow(0.88, u.reload);
-    this.maxSpeed = 15 * (1 + 0.1 * u.sails);
-    this.turnRate = 0.75 * (1 + 0.1 * u.sails);
-    if (this.cannonCount !== 4 + u.cannons) this.setCannons(4 + u.cannons);
+    this.dmg = b.dmg * (1 + 0.2 * u.guns);
+    this.reloadTime = b.reload * Math.pow(0.88, u.reload);
+    this.maxSpeed = b.speed * (1 + 0.1 * u.sails);
+    this.turnRate = b.turn * (1 + 0.1 * u.sails);
+    this.spread = b.spread;
+    if (this.cannonCount !== b.guns + u.cannons) this.setCannons(b.guns + u.cannons);
   }
   forward(v = new THREE.Vector3()) { return v.set(Math.sin(this.heading), 0, Math.cos(this.heading)); }
   // port = local +X, starboard = local -X
@@ -529,7 +579,7 @@ class Ship {
     const muzzle = this.local(sgn * 3.15, 1.05, cz);
     const sd = this.sideDir(side);
     const dir = new THREE.Vector3(sd.x * Math.cos(elev), Math.sin(elev), sd.z * Math.cos(elev));
-    dir.add(rv(0.018)).normalize();
+    dir.add(rv(this.spread)).normalize();
     const vel = dir.clone().multiplyScalar(BALL_SPEED).addScaledVector(this.forward(), this.speed);
     spawnBall(muzzle, vel, this, { dmg: this.dmg });
     fx.muzzle(muzzle, dir);
@@ -1160,8 +1210,8 @@ function runTimers(dt) {
   }
 }
 
-function makeProfile(id, name, colorIdx) {
-  return { id, name, colorIdx, gold: 0, earned: 0, kills: 0, up: { armor: 0, guns: 0, reload: 0, sails: 0, cannons: 0 },
+function makeProfile(id, name, colorIdx, design = DEFAULT_DESIGN) {
+  return { id, name, colorIdx, design: cleanDesign(design), gold: 0, earned: 0, kills: 0, up: { armor: 0, guns: 0, reload: 0, sails: 0, cannons: 0 },
            ship: null, respawnT: 0, gen: 0, input: { steer: 0, sail: 2 / 3 } };
 }
 function giveGold(prof, amt) { prof.gold += amt; prof.earned += amt; sfxFor('coin', prof); }
@@ -1182,6 +1232,14 @@ function clearEntities() {
   closeShop(true);
 }
 
+function makePlayerShip(design, extra = {}) {
+  const c = SHIP_CLASSES[design.cls];
+  const s = new Ship({ kind: 'p', colors: designColors(design), scale: c.scale, masts: c.masts, cannons: c.guns,
+    maxSpeed: c.speed, turnRate: c.turn, reloadTime: c.reload, dmg: c.dmg, spread: c.spread, ...extra });
+  s.design = design;
+  return s;
+}
+
 function spawnPlayerShip(p, x, z, h = 0) {
   if (x === undefined) {
     const mate = [...profiles.values()].map(q => q.ship).find(s => s && isAlive(s) && s.profile !== p);
@@ -1190,7 +1248,7 @@ function spawnPlayerShip(p, x, z, h = 0) {
     for (let k = 0; k < 10 && islands.some(o => Math.hypot(o.x - x, o.z - z) < o.r + 15); k++) { x += 25; z += 10; }
   }
   p.gen++;
-  const s = new Ship({ kind: 'p', id: `${p.id}#${p.gen}`, colors: PLAYER_COLORS[p.colorIdx % 4], colorIdx: p.colorIdx, x, z, heading: h, turnRate: 0.75 });
+  const s = makePlayerShip(p.design, { id: `${p.id}#${p.gen}`, colorIdx: p.colorIdx, x, z, heading: h, maxHp: SHIP_CLASSES[p.design.cls].hp });
   s.profile = p; s.pid = p.id; s.name = p.name;
   s.applyStats(p); s.hp = s.maxHp;
   s.sail = p.input.sail;
@@ -1254,7 +1312,7 @@ function startWave(n) {
   if (isBoss) {
     const [x, z] = spawnPoint(center, 200, 240);
     const boss = new Ship({
-      kind: 'b', colors: BOSS_COLORS, x, z, heading: Math.atan2(center.x - x, center.z - z),
+      kind: 'b', colors: BOSS_COLORS, masts: 3, x, z, heading: Math.atan2(center.x - x, center.z - z),
       scale: BOSS_SCALE, cannons: 6, maxHp: 450 + 200 * (k - 1) + 120 * extra, maxSpeed: 9.5,
       reloadTime: 2.4, aimErr: 0.04, turnRate: 0.4, dmg: 12,
     });
@@ -1371,7 +1429,7 @@ function startHost() {
   leaveNet();
   clearEntities(); profiles.clear();
   net.mode = 'host'; myId = 'host'; state = 'lobby';
-  profiles.set(myId, makeProfile(myId, myName, 0));
+  profiles.set(myId, makeProfile(myId, myName, 0, myDesign));
   net.code = genCode();
   renderHostLobby('Opening a room…');
   const token = net.token;
@@ -1405,7 +1463,7 @@ function onGuestMsg(conn, m) {
       const used = new Set([...profiles.values()].map(p => p.colorIdx));
       let ci = 0; while (used.has(ci)) ci++;
       const name = String(m.name || 'Pirate').slice(0, 16) || 'Pirate';
-      const p = makeProfile(conn.peer, name, ci);
+      const p = makeProfile(conn.peer, name, ci, designFromArr(m.design));
       profiles.set(conn.peer, p);
       net.conns.set(conn.peer, conn);
       conn.send({ t: 'welcome', id: conn.peer });
@@ -1447,7 +1505,7 @@ function buildSnapshot() {
     s: ships.filter(s => !s.dead && s !== menuShip).map(s => [
       s.id, s.kind, r2(s.pos.x), r2(s.pos.z), r2(s.heading), r2(s.speed), r2(s.sail),
       Math.ceil(s.hp), s.maxHp, s.sinking ? 1 : 0, s.colorIdx, s.cannonCount,
-      r2(s.reload.port), r2(s.reload.star), r2(s.reloadTime), s.pid, s.name]),
+      r2(s.reload.port), r2(s.reload.star), r2(s.reloadTime), s.pid, s.name, s.design ? designArr(s.design) : 0]),
     f: forts.map(f => [Math.ceil(f.hp), f.destroyed ? 1 : 0, r2(f.aim)]),
     c: crates.map(c => [c.id, r2(c.x), r2(c.z)]),
     p: [...profiles.values()].map(p => [p.id, p.name, p.gold, p.earned, p.kills,
@@ -1497,7 +1555,7 @@ function openGuestPeer(opts, code) {
       if (s === 'checking') renderGuestLobby(`Step 3/3: found room ${code}, opening a direct connection…`);
       if (s === 'failed') hostLost(`Found room ${code}, but your browsers could not connect directly. One of the networks is blocking it — try another Wi-Fi or a phone hotspot.`);
     });
-    conn.on('open', () => { net.joinStage = 'joining the crew'; conn.send({ t: 'join', name: myName }); });
+    conn.on('open', () => { net.joinStage = 'joining the crew'; conn.send({ t: 'join', name: myName, design: designArr(myDesign) }); });
     conn.on('data', onHostMsg);
     conn.on('close', () => { if (net.hostConn === conn) hostLost('The host closed the game.'); });
     conn.on('error', (e) => { if (net.hostConn === conn && !myId) hostLost('Connection error: ' + (e && e.type || e)); });
@@ -1570,12 +1628,13 @@ function applySnapshot(m) {
   const seen = new Set();
   let mine = null;
   for (const a of m.s) {
-    const [id, kind, x, z, h, sp, sail, hp, maxHp, sink, ci, cn, rp, rs, rt, pid, name] = a;
+    const [id, kind, x, z, h, sp, sail, hp, maxHp, sink, ci, cn, rp, rs, rt, pid, name, des] = a;
     seen.add(id);
     let s = netShips.get(id);
     if (!s) {
-      const colors = kind === 'p' ? PLAYER_COLORS[ci % 4] : kind === 'b' ? BOSS_COLORS : ENEMY_COLORS[ci % ENEMY_COLORS.length];
-      s = new Ship({ kind, id, colors, colorIdx: ci, x, z, heading: h, scale: kind === 'b' ? BOSS_SCALE : 1, cannons: cn, maxHp });
+      if (kind === 'p') s = makePlayerShip(designFromArr(des), { id, colorIdx: ci, x, z, heading: h, cannons: cn, maxHp });
+      else s = new Ship({ kind, id, colors: kind === 'b' ? BOSS_COLORS : ENEMY_COLORS[ci % ENEMY_COLORS.length], colorIdx: ci,
+        x, z, heading: h, scale: kind === 'b' ? BOSS_SCALE : 1, masts: kind === 'b' ? 3 : 2, cannons: cn, maxHp });
       s.remote = true; s.pid = pid; s.name = name; s.hp = hp;
       netShips.set(id, s); ships.push(s);
     }
@@ -1632,7 +1691,8 @@ const CONTROLS = `
     <tr><td>Esc / P</td><td>Pause / menu</td></tr>
   </table>`;
 
-function setOverlay(html) {
+function setOverlay(html, cls = '') {
+  $('overlay').className = cls;
   $('panel').innerHTML = html;
   $('overlay').style.display = html ? 'flex' : 'none';
   hud.style.display = (state === 'menu' || state === 'lobby') ? 'none' : 'block';
@@ -1643,16 +1703,51 @@ function showMainMenu(msg = '') {
   state = 'menu';
   if (document.pointerLockElement) document.exitPointerLock();
   clearEntities(); profiles.clear(); netPlayers.clear();
-  menuShip = new Ship({ kind: 'p', colors: PLAYER_COLORS[0] });
-  menuShip.sail = 1 / 3;
-  ships.push(menuShip);
+  refreshMenuShip();
+  const mc = SHIP_CLASSES[myDesign.cls];
   setOverlay(`<h1>BROADSIDE!</h1><h2>Pirate ship battles on the high seas</h2>
     ${msg ? `<div class="err">${esc(msg)}</div>` : ''}
     <div class="row">Captain name: <input id="nameIn" maxlength="16" value="${esc(myName)}"></div>
+    <div class="row">Your ship: <b>${mc.name}</b> <button class="ghost" data-act="shipyard">🛠 Shipyard</button></div>
     <div class="row"><button data-act="solo">⚓ Solo Voyage</button> <button data-act="host">🏴‍☠️ Host Online Game</button></div>
     <div class="row"><input id="codeIn" maxlength="5" placeholder="CODE" value="${esc(net.lastCode || '')}" style="width:140px;text-transform:uppercase;letter-spacing:4px"> <button data-act="join">${net.lastCode && msg ? '↻ Retry Join' : 'Join Online Game'}</button></div>
     <div style="opacity:.75;font-size:14px">Bosses every 5th wave · Forts guard some islands · Up to 4 captains online (co-op or PvP)</div>
     <details><summary>Controls</summary>${CONTROLS}</details>`);
+}
+
+// rebuild the showcase ship on the menu so the current design is visible
+function refreshMenuShip() {
+  let x = 0, z = 0, h = 0;
+  if (menuShip) { x = menuShip.pos.x; z = menuShip.pos.z; h = menuShip.heading; menuShip.remove(); ships = ships.filter(s => s !== menuShip); }
+  menuShip = makePlayerShip(myDesign, { x, z, heading: h });
+  menuShip.sail = 1 / 3;
+  ships.push(menuShip);
+}
+
+function statBar(label, v) { return `<div class="stat"><span>${label}</span><i><b style="width:${Math.round(clamp(v, 0.05, 1) * 100)}%"></b></i></div>`; }
+function showShipyard() {
+  const cards = Object.entries(SHIP_CLASSES).map(([key, c]) => `
+    <div class="cls ${myDesign.cls === key ? 'sel' : ''}" data-cls="${key}">
+      <div class="cn">${c.name}</div><div class="ct">${c.tag}</div>
+      ${statBar('Hull', c.hp / 190)}${statBar('Speed', c.speed / 19)}${statBar('Agility', c.turn / 1.15)}
+      ${statBar('Firepower', c.guns * c.dmg / 84)}${statBar('Reload', 1.7 / c.reload)}${statBar('Accuracy', 0.01 / c.spread)}
+      <div style="font-size:12px;opacity:.75;margin-top:4px">${c.guns} guns per side</div>
+    </div>`).join('');
+  const sw = (key, list) => list.map((col, i) =>
+    `<button class="sw ${myDesign[key] === i ? 'sel' : ''}" data-sw="${key}" data-i="${i}" style="background:#${col.toString(16).padStart(6, '0')}"></button>`).join('');
+  setOverlay(`<h1 style="font-size:44px">Shipyard</h1>
+    <div class="classes">${cards}</div>
+    <div class="cdesc">${SHIP_CLASSES[myDesign.cls].desc}</div>
+    <div class="swrow"><span>Hull</span>${sw('hull', HULL_COLORS)}</div>
+    <div class="swrow"><span>Trim</span>${sw('trim', TRIM_COLORS)}</div>
+    <div class="swrow"><span>Sails</span>${sw('sail', SAIL_COLORS)}</div>
+    <div class="row"><button data-act="solo">⚓ Set Sail</button> <button class="ghost" data-act="menu">Back</button></div>`, 'side');
+}
+function setDesign(patch) {
+  myDesign = cleanDesign({ ...myDesign, ...patch });
+  localStorage.setItem('broadsideDesign', JSON.stringify(myDesign));
+  refreshMenuShip();
+  showShipyard();
 }
 
 function renderHostLobby(status = '') {
@@ -1722,16 +1817,21 @@ function startSolo() {
   leaveNet();
   net.mode = 'solo'; myId = 'host'; gameMode = 'coop';
   profiles.clear();
-  profiles.set(myId, makeProfile(myId, myName, 0));
+  profiles.set(myId, makeProfile(myId, myName, 0, myDesign));
   startMatch();
 }
 
 $('overlay').addEventListener('click', (e) => {
+  const cls = e.target.closest('[data-cls]');
+  if (cls) { setDesign({ cls: cls.dataset.cls }); return; }
+  const sw = e.target.closest('[data-sw]');
+  if (sw) { setDesign({ [sw.dataset.sw]: +sw.dataset.i }); return; }
   const btn = e.target.closest('[data-act]');
   if (!btn) return;
   initAudio();
   switch (btn.dataset.act) {
     case 'solo': readName(); startSolo(); break;
+    case 'shipyard': readName(); showShipyard(); break;
     case 'host': readName(); startHost(); break;
     case 'join': readName(); startJoin($('codeIn').value); break;
     case 'mode-coop': gameMode = 'coop'; renderHostLobby(); broadcastLobby(); break;
@@ -2009,13 +2109,14 @@ function getMe() {
 
 function updateCamera(dt, focus) {
   const yaw = (me ? me.heading : 0) + camYaw;
-  camY += (focus.y * 0.5 + 4 - camY) * Math.min(1, dt * 3);
+  const sz = me ? me.scale : 1, dist = camDist * (0.6 + 0.4 * sz);
+  camY += (focus.y * 0.5 + 4 * sz - camY) * Math.min(1, dt * 3);
   const target = new THREE.Vector3(focus.x, camY, focus.z);
   const cp = Math.cos(camPitch);
   camera.position.set(
-    target.x + Math.sin(yaw) * cp * camDist,
-    target.y + Math.sin(camPitch) * camDist,
-    target.z + Math.cos(yaw) * cp * camDist
+    target.x + Math.sin(yaw) * cp * dist,
+    target.y + Math.sin(camPitch) * dist,
+    target.z + Math.cos(yaw) * cp * dist
   );
   camera.position.y = Math.max(camera.position.y, waveHeight(camera.position.x, camera.position.z, time) + 1.5);
   if (shake > 0) { camera.position.add(rv(shake * 0.6)); shake = Math.max(0, shake - dt * 2.5); }
