@@ -61,7 +61,12 @@
   #overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(5,20,35,.55); }
   #overlay.side { justify-content: flex-start; padding-left: 3vw; background: linear-gradient(90deg, rgba(5,20,35,.6), transparent 60%); }
   .classes { display: flex; gap: 10px; justify-content: center; margin: 10px 0 14px; }
-  .cls { width: 178px; padding: 10px; text-align: left; border: 2px solid #6b4a20; border-radius: 10px; background: rgba(0,0,0,.3); cursor: pointer; }
+  #overlay.side #panel { max-width: 740px; }
+  .spec { font-size: 11.5px; line-height: 1.3; margin-top: 5px; opacity: .92; }
+  .spec b { color: #ffd977; }
+  .spec.good { color: #9ff0a8; margin-top: 4px; }
+  .spec.weak { color: #ffb0a0; margin-top: 1px; }
+  .cls { width: 200px; padding: 10px; text-align: left; border: 2px solid #6b4a20; border-radius: 10px; background: rgba(0,0,0,.3); cursor: pointer; }
   .cls:hover { border-color: #c9a45c; }
   .cls.sel { border-color: #ffd977; background: rgba(255,217,119,.12); box-shadow: 0 0 12px rgba(255,217,119,.35); }
   .cls .cn { font-size: 19px; color: #ffd977; }
@@ -154,13 +159,22 @@ const BOSS_SCALE = 1.8;
 const SHIP_CLASSES = {
   sloop: { name: 'Sloop', tag: 'Small, fast & agile',
     desc: 'A nimble single-masted raider. Turns on a doubloon and reloads fast, but carries light guns and a thin hull.',
-    scale: 0.78, masts: 1, repairTime: 45, hp: 75, speed: 19, turn: 1.15, guns: 3, dmg: 10, reload: 1.7, spread: 0.022 },
+    scale: 0.78, masts: 1, repairTime: 45, hp: 75, speed: 19, turn: 1.15, guns: 3, dmg: 10, reload: 1.7, spread: 0.022,
+    dodge: 0.2, passive: 'Nimble — 20% of cannonballs miss you; sails over shallows',
+    special: { key: 'smoke', name: 'Smoke Screen', icon: '🌫', cd: 22, desc: 'Enemies lose track of you for 5s, plus a speed burst' },
+    good: 'Heavies, bomb ketches, forts', weak: 'Raiders, close broadsides' },
   frigate: { name: 'Frigate', tag: 'Balanced — the historical warship',
     desc: 'The classic two-masted fighting ship of the age of sail: a sound mix of speed and armour, with well-drilled, accurate gun crews.',
-    scale: 1, masts: 2, repairTime: 70, hp: 115, speed: 15, turn: 0.75, guns: 4, dmg: 10, reload: 2.3, spread: 0.01 },
+    scale: 1, masts: 2, repairTime: 70, hp: 115, speed: 15, turn: 0.75, guns: 4, dmg: 10, reload: 2.3, spread: 0.01,
+    longShot: true, passive: 'Marksmen — +25% damage beyond 60 m, double damage to fireships',
+    special: { key: 'rapid', name: 'Rapid Reload', icon: '⚡', cd: 20, desc: 'Both sides reload instantly, then 60% faster for 6s' },
+    good: 'Fireships, raiders, long-range duels', weak: 'Being caught in shallows' },
   manowar: { name: "Man-o'-War", tag: 'Huge, slow & heavily armed',
     desc: 'A three-masted floating fortress. Massive hull and a devastating broadside, but slow to sail and clumsy to turn.',
-    scale: 1.35, masts: 3, repairTime: 110, hp: 180, speed: 10.5, turn: 0.48, guns: 6, dmg: 12, reload: 3.4, spread: 0.02 },
+    scale: 1.35, masts: 3, repairTime: 110, hp: 180, speed: 10.5, turn: 0.5, guns: 6, dmg: 12, reload: 3.4, spread: 0.02,
+    armor: 0.2, chasers: true, passive: 'Ironclad — takes 20% less damage; bow & stern chaser guns fire on their own',
+    special: { key: 'blaze', name: 'All Guns Blazing', icon: '💥', cd: 18, desc: 'Fire both broadsides at once' },
+    good: 'Surrounding fleets, raiders astern', weak: 'Mortars, reefs & shallows' },
 };
 const HULL_COLORS = [0x6b4226, 0x3a2a1e, 0x3d4f63, 0x5a1f1f, 0x2f4a33, 0x1c1a1a];
 const TRIM_COLORS = [0xd4a017, 0xcfcfcf, 0x5ab0ff, 0xc0302a, 0x55c060, 0xd070ff];
@@ -205,7 +219,7 @@ const ESCORT_COST = 1200, MAX_ESCORTS = 2;
 const AMMO = {
   round: { key: '1', name: 'Round', icon: '●', dmg: 1, unlock: null },
   chain: { key: '2', name: 'Chain', icon: '⛓', dmg: 0.6, unlock: 'ammo_chain' },
-  fire: { key: '3', name: 'Fire', icon: '🔥', dmg: 0.7, unlock: 'ammo_fire' },
+  fire: { key: '3', name: 'Fire', icon: '🔥', dmg: 0.25, unlock: 'ammo_fire' },   // most of its damage comes from the burn
   explosive: { key: '4', name: 'Explosive', icon: '💣', dmg: 1.4, reload: 1.35, unlock: 'ammo_explosive' },
 };
 const ABILITIES = {
@@ -226,7 +240,7 @@ const UPGRADES = {
   cannons: { icon: '⚙', name: 'Extra Gun Ports', desc: '+1 cannon per side', max: 2, cost: [500, 900] },
   carpenters: { icon: '🪚', name: "Ship's Carpenters", desc: '+30% auto-repair speed, starts sooner', max: 5, cost: [200, 350, 550, 800, 1100] },
   ammo_chain: { cat: 'ammo', icon: '⛓', name: 'Chain Shot', desc: 'Key 2 · 60% damage but shreds sails: target slowed 40% for 6s', max: 1, cost: [600] },
-  ammo_fire: { cat: 'ammo', icon: '🔥', name: 'Fire Shot', desc: 'Key 3 · 70% damage, sets ships ablaze (burns 5s)', max: 1, cost: [900] },
+  ammo_fire: { cat: 'ammo', icon: '🔥', name: 'Fire Shot', desc: 'Key 3 · light impact, then flames burn tick by tick for 6s (stacks ×5) and slow repairs', max: 1, cost: [900] },
   ammo_explosive: { cat: 'ammo', icon: '💣', name: 'Explosive Shell', desc: 'Key 4 · 140% damage + small blast, 35% slower reload', max: 1, cost: [1500] },
   kegs: { cat: 'ability', icon: '🛢', name: 'Powder Kegs', desc: 'Key F · drop floating mines astern (levels: more kegs, bigger boom)', max: 3, cost: [700, 1000, 1400] },
   mortar: { cat: 'ability', icon: '🎯', name: 'Mortar Strike', desc: 'Key R · shells rain on your aim zone (levels: more shells, more damage)', max: 3, cost: [1200, 1700, 2300] },
@@ -542,10 +556,12 @@ class Ship {
     this.sinking = false; this.sinkT = 0; this.dead = false;
     this.fxT = 0; this.wakeT = 0; this.bumpCd = 0;
     this.prefRange = rand(45, 70);
-    this.slowT = 0; this.burnT = 0; this.burnDps = 0; this.burnBy = null; this.boostT = 0; this.burnFx = 0;
+    this.slowT = 0; this.burnT = 0; this.burnDps = 0; this.burnBy = null; this.burnStacks = 0; this.burnTick = BURN_TICK; this.boostT = 0; this.burnFx = 0;
     this.regen = 0; this.regenDelay = 6; this.lastHitT = -99; this.repairing = false;
     this.role = null; this.flank = Math.random() < 0.5 ? -1 : 1; this.slotOff = rand(-1.2, 1.2); this.losShift = 0;
     this.mortarT = rand(3, 6); this.reloadMul = 1; this.aground = false;
+    this.dodge = 0; this.armor = 0; this.longShot = false; this.chasers = false;
+    this.smokeT = 0; this.rapidT = 0; this.chaserT = 1; this.engaged = true;
     this.remote = false; this.net = null; this.profile = null; this.lastHitBy = null;
     this.pid = ''; this.name = ''; this.tag = null;
   }
@@ -571,6 +587,7 @@ class Ship {
     this.maxSpeed = b.speed * (1 + 0.1 * u.sails);
     this.turnRate = b.turn * (1 + 0.1 * u.sails);
     this.spread = b.spread;
+    this.dodge = b.dodge || 0; this.armor = b.armor || 0; this.longShot = !!b.longShot; this.chasers = !!b.chasers;
     // auto-repair: a full hull takes the class repair time (bigger ships take longer); carpenters speed it up
     this.regen = (this.maxHp / b.repairTime) * (1 + 0.3 * u.carpenters);
     this.regenDelay = 6 - 0.7 * u.carpenters;
@@ -619,10 +636,21 @@ class Ship {
       }
     } else {
       this.slowT = Math.max(0, this.slowT - dt);
+      this.smokeT = Math.max(0, this.smokeT - dt);
+      this.rapidT = Math.max(0, this.rapidT - dt);
+      if (this.chasers && gameActive) this.updateChasers(dt);
       this.boostT = Math.max(0, this.boostT - dt);
-      if (this.burnT > 0) { this.burnT -= dt; this.damage(this.burnDps * dt, this.burnBy, true); }
-      if (this.regen && this.hp < this.maxHp && this.burnT <= 0 && time - this.lastHitT > this.regenDelay) {
-        this.hp = Math.min(this.maxHp, this.hp + this.regen * dt); this.repairing = true;
+      if (this.burnT > 0) {
+        this.burnT -= dt; this.burnTick -= dt;
+        if (this.burnTick <= 0) {   // flames bite in ticks, not all at once
+          this.burnTick = BURN_TICK;
+          this.damage(this.burnStacks * this.burnDps * BURN_TICK, this.burnBy, true, true);
+          fx.fire(this.local(rand(-1.5, 1.5), 2.4, rand(-4, 4))); fx.fire(this.local(rand(-1.5, 1.5), 2.4, rand(-4, 4)));
+        }
+        if (this.burnT <= 0) this.burnStacks = 0;
+      }
+      if (this.regen && this.hp < this.maxHp && time - this.lastHitT > this.regenDelay) {
+        this.hp = Math.min(this.maxHp, this.hp + this.regen * dt * (this.burnT > 0 ? 0.3 : 1)); this.repairing = true;
       } else this.repairing = false;
       // deep hulls drag and scrape in shallow water; small ships (sloops, raiders) float over it
       let drag = 1;
@@ -639,8 +667,9 @@ class Ship {
       const turnEff = 0.35 + 0.65 * Math.min(1, this.speed / (this.maxSpeed * 0.6));
       this.heading += this.steer * this.turnRate * turnEff * dt;
       this.pos.addScaledVector(this.forward(), this.speed * dt);
-      this.reload.port = Math.max(0, this.reload.port - dt * this.reloadMul);
-      this.reload.star = Math.max(0, this.reload.star - dt * this.reloadMul);
+      const rm = this.reloadMul * (this.rapidT > 0 ? 1.6 : 1);
+      this.reload.port = Math.max(0, this.reload.port - dt * rm);
+      this.reload.star = Math.max(0, this.reload.star - dt * rm);
     }
 
     // float on the waves: sample fore/aft and port/starboard
@@ -674,6 +703,7 @@ class Ship {
       if (blazing) { fx.fire(this.local(rand(-1.5, 1.5), 2.2, rand(-5, 5))); if (Math.random() < 0.4) fx.smoke(this.local(rand(-1, 1), 3, rand(-4, 4)), true); }
       if (this.slowT > 0 && Math.random() < 0.3) P({ pos: this.local(rand(-2, 2), rand(6, 11), rand(-3, 3)), vel: rv(1).setY(-1), color: 0xe8dcc0, size: 0.35, life: 1.2, gravity: 4, box: true });
     }
+    if (this.smokeT > 0 && Math.random() < dt * 14) P({ pos: this.local(rand(-3, 3), rand(1, 5), rand(-7, 4)), vel: rv(1.5).setY(rand(0.3, 1.2)), color: 0xb9bcc0, size: rand(2, 3.5), life: rand(3, 4.5), grow: 1.2, drag: 1.5, opacity: 0.85 });
     if (this.boostT > 0 && this.wakeT <= 0 && Math.random() < 0.5) fx.wake(this.local(rand(-1, 1), 0.6, 7.5), rv(1.5).setY(rand(1.5, 3.5)), 0.4);
     // wake
     this.wakeT -= dt;
@@ -708,6 +738,34 @@ class Ship {
     return true;
   }
 
+  updateChasers(dt) {
+    this.chaserT -= dt;
+    if (this.chaserT > 0) return;
+    this.chaserT = 0.4;
+    const f = this.forward();
+    for (const end of [1, -1]) {
+      let best = null, bd = 80;
+      for (const o of ships) {
+        if (!canHit(this, o)) continue;
+        const dx = o.pos.x - this.pos.x, dz = o.pos.z - this.pos.z, d = Math.hypot(dx, dz);
+        if (d < bd && (dx * f.x + dz * f.z) * end / d > 0.8 && !losBlocked(this.pos.x, this.pos.z, o.pos.x, o.pos.z)) { bd = d; best = o; }
+      }
+      if (!best) continue;
+      const from = this.local(0, 2.4, end > 0 ? 8.2 : -6.4);
+      const of = best.forward(), tF = bd / BALL_SPEED;
+      const tx = best.pos.x + of.x * best.speed * tF, tz = best.pos.z + of.z * best.speed * tF;
+      const d = Math.hypot(tx - from.x, tz - from.z), y = 1 - from.y, v2 = BALL_SPEED * BALL_SPEED;
+      const disc = v2 * v2 - G * (G * d * d + 2 * y * v2);
+      if (disc < 0) continue;
+      const th = Math.atan((v2 - Math.sqrt(disc)) / (G * d)), az = Math.atan2(tx - from.x, tz - from.z) + rand(-0.02, 0.02);
+      const vel = new THREE.Vector3(Math.sin(az) * Math.cos(th), Math.sin(th), Math.cos(az) * Math.cos(th)).multiplyScalar(BALL_SPEED);
+      spawnBall(from, vel, this, { dmg: this.dmg * 0.8 });
+      fx.muzzle(from, vel.clone().normalize());
+      sfx('cannon', from);
+      this.chaserT = 2.4;
+    }
+  }
+
   fireCannon(side, sgn, cz, elev, ammo = 'round') {
     if (this.sinking || this.dead) return;
     const muzzle = this.local(sgn * 3.15, 1.05, cz);
@@ -715,15 +773,15 @@ class Ship {
     const dir = new THREE.Vector3(sd.x * Math.cos(elev), Math.sin(elev), sd.z * Math.cos(elev));
     dir.add(rv(this.spread)).normalize();
     const vel = dir.clone().multiplyScalar(BALL_SPEED).addScaledVector(this.forward(), this.speed);
-    spawnBall(muzzle, vel, this, { dmg: this.dmg * AMMO[ammo].dmg, ammo });
+    spawnBall(muzzle, vel, this, { dmg: this.dmg * AMMO[ammo].dmg, ammo, base: this.dmg });
     fx.muzzle(muzzle, dir);
     sfx('cannon', muzzle);
   }
 
-  damage(amount, attacker, quiet = false) {
+  damage(amount, attacker, quiet = false, dot = false) {
     if (this.sinking || this.dead || this.remote) return;
-    this.hp -= amount;
-    this.lastHitT = time;
+    this.hp -= amount * (1 - this.armor);
+    if (!dot) this.lastHitT = time;   // burning slows repairs but doesn't reset the repair timer
     if (attacker) this.lastHitBy = attacker;
     if (this === me && !quiet) hurtFx();
     if (this.hp <= 0) { this.hp = 0; this.startSinking(); }
@@ -1161,7 +1219,7 @@ function spawnBall(pos, vel, owner, opts = {}) {
   m.castShadow = true;
   if (opts.aoe) m.scale.setScalar(1.8);
   scene.add(m);
-  balls.push({ m, vel, owner, life: 0, trailT: 0, dmg: opts.dmg || 10, aoe: opts.aoe || 0, ammo });
+  balls.push({ m, vel, owner, life: 0, trailT: 0, dmg: opts.dmg || 10, aoe: opts.aoe || 0, ammo, ox: pos.x, oz: pos.z, missed: null, base: opts.base || opts.dmg || 10 });
   emit(['b', r2(pos.x), r2(pos.y), r2(pos.z), r2(vel.x), r2(vel.y), r2(vel.z), owner ? owner.id : '', opts.aoe || 0, AMMO_IDS.indexOf(ammo)]);
 }
 function removeBall(i) { scene.remove(balls[i].m); balls[i] = balls[balls.length - 1]; balls.pop(); }
@@ -1180,10 +1238,21 @@ function hitShip(s, p) {
 // special ammo effects on a hull hit (host only)
 function shotEffects(b, s, p) {
   if (b.ammo === 'chain') s.slowT = 6;
-  if (b.ammo === 'fire') { s.burnT = 5; s.burnDps = Math.max(s.burnDps || 0, b.dmg * 0.5); s.burnBy = b.owner; }
+  if (b.ammo === 'fire') applyBurn(s, 1, b.base * 0.15, b.owner);
   if (b.ammo === 'explosive') {
     for (const o of ships) if (o !== s && canHit(b.owner, o) && Math.hypot(o.pos.x - p.x, o.pos.z - p.z) < 7 * o.scale) o.damage(b.dmg * 0.5, b.owner);
   }
+}
+// Burning: each stack deals perStack damage per second in half-second ticks for 6s (refreshed by
+// new hits, max 5 stacks). Burning ships repair at 30% speed instead of not at all.
+const BURN_TIME = 6, BURN_MAX = 5, BURN_TICK = 0.5;
+function applyBurn(s, stacks, perStack, by) {
+  if (!isAlive(s)) return;
+  const active = s.burnT > 0;
+  s.burnStacks = Math.min(BURN_MAX, (active ? s.burnStacks : 0) + stacks);
+  s.burnDps = Math.max(active ? s.burnDps : 0, perStack);
+  s.burnT = BURN_TIME;
+  s.burnBy = by;
 }
 function teamOf(s) { return s.kind === 'p' || s.kind === 'a' ? 'P' : 'E'; }
 function canHit(owner, t) {
@@ -1204,7 +1273,14 @@ function updateBalls(dt, t, host) {
     if (host && !b.aoe) {
       for (const s of ships) {
         if (canHit(b.owner, s) && hitShip(s, p)) {
-          s.damage(b.dmg, b.owner);
+          if (b.missed && b.missed.has(s)) continue;
+          if (s.dodge && Math.random() < s.dodge) { (b.missed = b.missed || new Set()).add(s); continue; }   // nimble sloop: shot skims past
+          let dmg = b.dmg;
+          if (b.owner.longShot) {
+            if (Math.hypot(p.x - b.ox, p.z - b.oz) > 60) dmg *= 1.25;
+            if (s.role === 'fireship') dmg *= 2;
+          }
+          s.damage(dmg, b.owner);
           shotEffects(b, s, p);
           fxHit(p, b.ammo === 'explosive' ? 1.6 : 1);
           if (b.owner.kind === 'p' && b.owner.profile) notify('Direct hit!', b.owner.profile);
@@ -1366,7 +1442,7 @@ function nearestPlayerShip(x, z, maxD = Infinity) { return nearestOfTeam('P', x,
 function nearestOfTeam(team, x, z, maxD = Infinity) {
   let best = null, bd = maxD;
   for (const s of ships) {
-    if (teamOf(s) !== team || !isAlive(s) || s === menuShip) continue;
+    if (teamOf(s) !== team || !isAlive(s) || s === menuShip || s.smokeT > 0) continue;
     const d = Math.hypot(s.pos.x - x, s.pos.z - z);
     if (d < bd) { bd = d; best = s; }
   }
@@ -1382,19 +1458,25 @@ function updateFleet(dt) {
   fleet.retargetT -= dt;
   const foes = ships.filter(s => teamOf(s) === 'E' && isAlive(s));
   if (!foes.length) return;
-  if (fleet.retargetT <= 0 || !isAlive(fleet.target)) {
+  if (fleet.retargetT <= 0 || !isAlive(fleet.target) || fleet.target.smokeT > 0) {
     fleet.retargetT = 5;
     const c = new THREE.Vector3();
     foes.forEach(f => c.add(f.pos)); c.divideScalar(foes.length);
     let best = null, bs = Infinity;
     for (const s of ships) {
-      if (teamOf(s) !== 'P' || !isAlive(s) || s === menuShip) continue;
+      if (teamOf(s) !== 'P' || !isAlive(s) || s === menuShip || s.smokeT > 0) continue;
       // focus the weakest nearby captain; escorts are a lower priority
       const score = (s.hp / s.maxHp) * 120 + Math.hypot(s.pos.x - c.x, s.pos.z - c.z) * 0.5 + (s.kind === 'a' ? 60 : 0);
       if (score < bs) { bs = score; best = s; }
     }
     fleet.target = best;
   }
+  // fairness: only a handful of ships press the attack on the focus target; the rest wait on an outer ring
+  const slots = Math.min(6, 3 + Math.floor(wave / 4)) + 2 * Math.max(0, profiles.size - 1);
+  const t = fleet.target;
+  const brawlers = foes.filter(e => e.role !== 'fireship' && e.role !== 'ketch' && e.kind !== 'b');
+  if (t) brawlers.sort((a, b) => Math.hypot(a.pos.x - t.pos.x, a.pos.z - t.pos.z) - Math.hypot(b.pos.x - t.pos.x, b.pos.z - t.pos.z));
+  brawlers.forEach((e, i) => { e.engaged = i < slots; });
   fleet.flag = foes.find(s => s.role === 'flag') || null;
   for (const e of foes) {
     let m = 1;
@@ -1442,7 +1524,7 @@ function fireshipExplode(e) {
   for (const s of ships) {
     if (!canHit(e, s) || Math.hypot(s.pos.x - p.x, s.pos.z - p.z) > 13 * s.scale) continue;
     s.damage(e.dmg * 3.5, e);
-    s.burnT = 4; s.burnDps = e.dmg * 0.4; s.burnBy = e;
+    applyBurn(s, 3, e.dmg * 0.3, e);
   }
   e.selfDestruct = true;
   e.hp = 0;
@@ -1470,7 +1552,7 @@ function updateAI(e, dt) {
   let tgt;
   if (ally) tgt = nearestOfTeam('E', e.pos.x, e.pos.z, 220);
   else {
-    tgt = isAlive(fleet.target) ? fleet.target : nearestPlayerShip(e.pos.x, e.pos.z);
+    tgt = isAlive(fleet.target) && !(fleet.target.smokeT > 0) ? fleet.target : nearestPlayerShip(e.pos.x, e.pos.z);
     const near = role !== 'fireship' && nearestPlayerShip(e.pos.x, e.pos.z, 40 * sc);   // fight back at close range
     if (near) tgt = near;
   }
@@ -1504,7 +1586,8 @@ function updateAI(e, dt) {
       else if (role === 'ketch') slot = fleet.angle + Math.PI + e.flank * 0.3;    // hang back on the far side
       else slot = fleet.angle + e.slotOff;                                        // line ships spread around the target
       slot += e.losShift;
-      const gx = tgt.pos.x + Math.sin(slot) * e.prefRange, gz = tgt.pos.z + Math.cos(slot) * e.prefRange;
+      const range = e.prefRange + (e.engaged || ally ? 0 : 50);   // waiting ships hold an outer ring
+      const gx = tgt.pos.x + Math.sin(slot) * range, gz = tgt.pos.z + Math.cos(slot) * range;
       const gd = Math.hypot(gx - e.pos.x, gz - e.pos.z);
       if (dist < 22 * sc) { desired = toT + Math.PI; e.sail = 1; }
       else if (gd > 28 * sc) { desired = Math.atan2(gx - e.pos.x, gz - e.pos.z); e.sail = gd > 70 ? 1 : 2 / 3; }
@@ -1535,7 +1618,7 @@ function updateAI(e, dt) {
   if (!tgt) return;
 
   // broadside when the target is abeam and no land is in the way
-  if (dist < 115 && !blocked && e.cannonZ.length) {
+  if (dist < (e.engaged || ally ? 115 : 60) && !blocked && e.cannonZ.length) {
     for (const side of ['port', 'star']) {
       if (e.reload[side] > 0) continue;
       const sd = e.sideDir(side);
@@ -1654,7 +1737,7 @@ function runTimers(dt) {
 }
 
 function makeProfile(id, name, colorIdx, design = DEFAULT_DESIGN) {
-  return { id, name, colorIdx, design: cleanDesign(design), gold: 0, earned: 0, kills: 0, up: freshUp(), ammo: 'round', cd: { kegs: 0, mortar: 0, boost: 0 },
+  return { id, name, colorIdx, design: cleanDesign(design), gold: 0, earned: 0, kills: 0, up: freshUp(), ammo: 'round', cd: { kegs: 0, mortar: 0, boost: 0, special: 0 },
            ship: null, respawnT: 0, gen: 0, input: { steer: 0, sail: 2 / 3 } };
 }
 function giveGold(prof, amt) { prof.gold += amt; prof.earned += amt; sfxFor('coin', prof); }
@@ -1707,7 +1790,7 @@ function startMatch() {
   const n = profiles.size;
   let i = 0;
   for (const p of profiles.values()) {
-    Object.assign(p, { gold: 0, earned: 0, kills: 0, up: freshUp(), ammo: 'round', cd: { kegs: 0, mortar: 0, boost: 0 }, respawnT: 0, input: { steer: 0, sail: 2 / 3 } });
+    Object.assign(p, { gold: 0, earned: 0, kills: 0, up: freshUp(), ammo: 'round', cd: { kegs: 0, mortar: 0, boost: 0, special: 0 }, respawnT: 0, input: { steer: 0, sail: 2 / 3 } });
     if (gameMode === 'pvp') { const a = i / n * Math.PI * 2; spawnPlayerShip(p, Math.sin(a) * 90, Math.cos(a) * 90, a + Math.PI / 2); }
     else spawnPlayerShip(p, (i - (n - 1) / 2) * 25, 0, 0);
     i++;
@@ -1900,9 +1983,27 @@ function spawnEscort(prof) {
   ships.push(e);
 }
 
-function useAbility(prof, k, ax, az) {
-  const s = prof.ship, L = prof.up[k] || 0;
+function useAbility(prof, k, ax, az, elev = 0.2) {
+  const s = prof.ship, L = k === 'special' ? 1 : prof.up[k] || 0;
   if (!L || !isAlive(s) || !gameActive || prof.cd[k] > 0) return;
+  if (k === 'special') {
+    const sp = SHIP_CLASSES[prof.design.cls].special;
+    if (sp.key === 'smoke') {
+      s.smokeT = 5; s.boostT = Math.max(s.boostT, 5);
+      for (let i = 0; i < 26; i++) P({ pos: s.local(rand(-6, 6), rand(0.5, 5), rand(-9, 9)), vel: rv(3).setY(rand(0.5, 2)), color: 0xb9bcc0, size: rand(3, 5), life: rand(4, 5.5), grow: 1.5, drag: 1.2, opacity: 0.9 });
+      notify('🌫 Smoke screen! They’ve lost sight of you', prof);
+    } else if (sp.key === 'rapid') {
+      s.reload.port = s.reload.star = 0; s.rapidT = 6;
+      notify('⚡ Rapid reload!', prof);
+    } else if (sp.key === 'blaze') {
+      s.reload.port = s.reload.star = 0;
+      s.fire('port', elev); s.fire('star', elev);
+      notify('💥 All guns blazing!', prof);
+    }
+    prof.cd.special = sp.cd;
+    sfxFor('bell', prof);
+    return;
+  }
   if (k === 'kegs') {
     const n = 2 + L, f = s.forward();
     for (let i = 0; i < n; i++) {
@@ -2044,7 +2145,7 @@ function onGuestMsg(conn, m) {
       break;
     }
     case 'ab':
-      if (prof && ABILITIES[m.k]) useAbility(prof, m.k, Number.isFinite(m.x) ? m.x : null, Number.isFinite(m.z) ? m.z : null);
+      if (prof && (ABILITIES[m.k] || m.k === 'special')) useAbility(prof, m.k, Number.isFinite(m.x) ? m.x : null, Number.isFinite(m.z) ? m.z : null, clamp(+m.e || 0, 0, 0.44));
       break;
     case 'buy':
       if (prof && gameActive) applyBuy(prof, String(m.k));
@@ -2070,7 +2171,7 @@ function buildSnapshot() {
       s.id, s.kind, r2(s.pos.x), r2(s.pos.z), r2(s.heading), r2(s.speed), r2(s.sail),
       Math.ceil(s.hp), s.maxHp, s.sinking ? 1 : 0, s.colorIdx, s.cannonCount,
       r2(s.reload.port), r2(s.reload.star), r2(s.reloadTime), s.pid, s.name, s.design ? designArr(s.design) : s.aiType ? ['ai', s.aiType.scale, s.aiType.masts, s.role] : 0,
-      (s.burnT > 0 ? 1 : 0) | (s.slowT > 0 ? 2 : 0) | (s.boostT > 0 ? 4 : 0) | (s.repairing ? 8 : 0)]),
+      (s.burnT > 0 ? 1 : 0) | (s.slowT > 0 ? 2 : 0) | (s.boostT > 0 ? 4 : 0) | (s.repairing ? 8 : 0) | (s.smokeT > 0 ? 16 : 0) | (Math.min(7, s.burnStacks | 0) << 5)]),
     f: forts.map(f => [Math.ceil(f.hp), f.destroyed ? 1 : 0, r2(f.aim)]),
     c: crates.map(c => [c.id, r2(c.x), r2(c.z)]),
     p: [...profiles.values()].map(p => [p.id, p.name, p.gold, p.earned, p.kills,
@@ -2209,7 +2310,7 @@ function applySnapshot(m) {
     s.net = { x, z, h, sp };
     s.sail = sail; s.maxHp = maxHp;
     if (des && des[0] === 'ai') s.role = des[3];
-    s.burnT = fl & 1 ? 0.3 : 0; s.slowT = fl & 2 ? 0.3 : 0; s.boostT = fl & 4 ? 0.3 : 0; s.repairing = !!(fl & 8);
+    s.burnT = fl & 1 ? 0.3 : 0; s.slowT = fl & 2 ? 0.3 : 0; s.boostT = fl & 4 ? 0.3 : 0; s.repairing = !!(fl & 8); s.smokeT = fl & 16 ? 0.3 : 0; s.burnStacks = (fl >> 5) & 7;
     if (pid === myId && hp < s.hp - 0.5) hurtFx();
     s.hp = hp;
     s.reload.port = rp; s.reload.star = rs; s.reloadTime = rt;
@@ -2228,7 +2329,7 @@ function applySnapshot(m) {
 
   netPlayers.clear();
   for (const [id, name, gold, earned, kills, up, respawnT, ci, ammo, cd] of m.p) {
-    netPlayers.set(id, { id, name, gold, earned, kills, respawnT, colorIdx: ci, up: { ...freshUp(), ...up }, ammo, cd: cd || {} });
+    netPlayers.set(id, { id, name, gold, earned, kills, respawnT, colorIdx: ci, up: { ...freshUp(), ...up }, ammo, cd: cd || {}, design: id === myId ? myDesign : DEFAULT_DESIGN });
   }
   const kids = new Set((m.k || []).map(k => k[0]));
   for (let i = kegs.length - 1; i >= 0; i--) if (!kids.has(kegs[i].id)) { scene.remove(kegs[i].m); kegs.splice(i, 1); }
@@ -2258,6 +2359,7 @@ const CONTROLS = `
     <tr><td>Click / Space</td><td>Fire the broadside you're facing</td></tr>
     <tr><td>Q / E</td><td>Swing aim to port / starboard — press again to fire</td></tr>
     <tr><td>1 – 4</td><td>Switch ammo (once unlocked at the shipwright)</td></tr>
+    <tr><td>C</td><td>Your ship class's signature move (smoke / rapid reload / all guns)</td></tr>
     <tr><td>F / R / Shift</td><td>Abilities: powder kegs / mortar strike / speed burst</td></tr>
     <tr><td>B</td><td>Shipwright — buy upgrades &amp; repairs</td></tr>
     <tr><td>M</td><td>Big map of the sea (islands, shallows, reefs, forts)</td></tr>
@@ -2307,6 +2409,9 @@ function showShipyard() {
       ${statBar('Hull', c.hp / 180)}${statBar('Speed', c.speed / 19)}${statBar('Agility', c.turn / 1.15)}
       ${statBar('Firepower', c.guns * c.dmg / 72)}${statBar('Reload', 1.7 / c.reload)}${statBar('Accuracy', 0.01 / c.spread)}
       <div style="font-size:12px;opacity:.75;margin-top:4px">${c.guns} guns per side</div>
+      <div class="spec">🛡 ${c.passive}</div>
+      <div class="spec">⭐ <b>C · ${c.special.name}</b> — ${c.special.desc}</div>
+      <div class="spec good">✔ Strong vs: ${c.good}</div><div class="spec weak">✘ Weak vs: ${c.weak}</div>
     </div>`).join('');
   const sw = (key, list) => list.map((col, i) =>
     `<button class="sw ${myDesign[key] === i ? 'sel' : ''}" data-sw="${key}" data-i="${i}" style="background:#${col.toString(16).padStart(6, '0')}"></button>`).join('');
@@ -2676,11 +2781,12 @@ function selectAmmo(k) {
 function triggerAbility(k) {
   const prof = myProf();
   if (!prof || !isAlive(me)) return;
-  if (!prof.up[k]) { toast(`${UPGRADES[k].name} not owned — buy it at the shipwright (B)`); return; }
-  if ((prof.cd[k] || 0) > 0) { toast(`${UPGRADES[k].name} ready in ${Math.ceil(prof.cd[k])}s`); return; }
+  const nm = k === 'special' ? SHIP_CLASSES[prof.design ? prof.design.cls : myDesign.cls].special.name : UPGRADES[k].name;
+  if (k !== 'special' && !prof.up[k]) { toast(`${nm} not owned — buy it at the shipwright (B)`); return; }
+  if ((prof.cd[k] || 0) > 0) { toast(`${nm} ready in ${Math.ceil(prof.cd[k])}s`); return; }
   const ax = aimPoint ? aimPoint.x : null, az = aimPoint ? aimPoint.z : null;
-  if (net.mode === 'guest') sendToHost({ t: 'ab', k, x: ax, z: az });
-  else useAbility(prof, k, ax, az);
+  if (net.mode === 'guest') sendToHost({ t: 'ab', k, x: ax, z: az, e: aimElev });
+  else useAbility(prof, k, ax, az, aimElev);
 }
 
 // Q/E: first press swings the view and aim to that broadside; pressing again (once aimed) fires
@@ -2740,7 +2846,9 @@ function updateHUD() {
     $('wave').textContent = `Wave ${wave}`;
     $('foes').textContent = `Foes: ${ships.filter(s => teamOf(s) === 'E' && isAlive(s)).length}`;
   }
-  $('repairing').textContent = isAlive(me) && me.repairing ? '🔧 repairing' : '';
+  const rep_ = $('repairing');
+  if (isAlive(me) && me.burnT > 0) { rep_.textContent = `🔥 burning ×${me.burnStacks || 1} — repairs slowed`; rep_.style.color = '#ffa860'; }
+  else { rep_.textContent = isAlive(me) && me.repairing ? '🔧 repairing' : ''; rep_.style.color = '#8dffa0'; }
   // ammo + abilities bar
   if (prof) {
     const ammo = prof.ammo || 'round', cd = prof.cd || {};
@@ -2749,7 +2857,9 @@ function updateHUD() {
       const owned = !a.unlock || prof.up[a.unlock];
       html += `<div class="slot ${ammo === k ? 'sel' : ''} ${owned ? '' : 'off'}"><b>${a.key}</b>${a.icon} ${a.name}</div>`;
     }
-    let first = true;
+    const spc = SHIP_CLASSES[(prof.design || myDesign).cls].special, sc = cd.special || 0;
+    html += `<div class="slot gap ${sc > 0 ? 'cool' : ''}" title="${spc.desc}"><b>C</b>${spc.icon} ${sc > 0 ? Math.ceil(sc) + 's' : spc.name}</div>`;
+    let first = false;
     for (const [k, a] of Object.entries(ABILITIES)) {
       if (!prof.up[k]) continue;
       const c = cd[k] || 0;
@@ -2834,6 +2944,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyW') mySail = Math.min(1, Math.round(mySail * 3 + 1) / 3);
   if (e.code === 'KeyS') mySail = Math.max(0, Math.round(mySail * 3 - 1) / 3);
   if (/^Digit[1-4]$/.test(e.code)) selectAmmo(AMMO_IDS[+e.code.slice(5) - 1]);
+  if (e.code === 'KeyC') triggerAbility('special');
   if (e.code === 'KeyF') triggerAbility('kegs');
   if (e.code === 'KeyR') triggerAbility('mortar');
   if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') triggerAbility('boost');
@@ -2947,6 +3058,7 @@ if (location.search.includes('debug')) window.__dbg = {
   get state() { return state; }, get wave() { return wave; }, get ships() { return ships; }, get me() { return me; },
   profiles, islands, reefs, forts, fleet, shallowAt, startWave, applyBuy, useAbility, triggerAbility, selectAmmo,
   gold(n) { const p = profiles.get(myId); p.gold += n; },
+  applyBurnTest(s, n, per) { s.lastHitT = -99; applyBurn(s, n, per, null); },
 };
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
