@@ -124,13 +124,13 @@ const BOSS_SCALE = 1.8;
 const SHIP_CLASSES = {
   sloop: { name: 'Sloop', tag: 'Small, fast & agile',
     desc: 'A nimble single-masted raider. Turns on a doubloon and reloads fast, but carries light guns and a thin hull.',
-    scale: 0.78, masts: 1, hp: 70, speed: 19, turn: 1.15, guns: 3, dmg: 9, reload: 1.7, spread: 0.022 },
+    scale: 0.78, masts: 1, hp: 75, speed: 19, turn: 1.15, guns: 3, dmg: 10, reload: 1.7, spread: 0.022 },
   frigate: { name: 'Frigate', tag: 'Balanced — the historical warship',
     desc: 'The classic two-masted fighting ship of the age of sail: a sound mix of speed and armour, with well-drilled, accurate gun crews.',
-    scale: 1, masts: 2, hp: 110, speed: 15, turn: 0.75, guns: 4, dmg: 10, reload: 2.4, spread: 0.01 },
+    scale: 1, masts: 2, hp: 115, speed: 15, turn: 0.75, guns: 4, dmg: 10, reload: 2.3, spread: 0.01 },
   manowar: { name: "Man-o'-War", tag: 'Huge, slow & heavily armed',
     desc: 'A three-masted floating fortress. Massive hull and a devastating broadside, but slow to sail and clumsy to turn.',
-    scale: 1.35, masts: 3, hp: 190, speed: 10.5, turn: 0.48, guns: 6, dmg: 14, reload: 3.2, spread: 0.02 },
+    scale: 1.35, masts: 3, hp: 180, speed: 10.5, turn: 0.48, guns: 6, dmg: 12, reload: 3.4, spread: 0.02 },
 };
 const HULL_COLORS = [0x6b4226, 0x3a2a1e, 0x3d4f63, 0x5a1f1f, 0x2f4a33, 0x1c1a1a];
 const TRIM_COLORS = [0xd4a017, 0xcfcfcf, 0x5ab0ff, 0xc0302a, 0x55c060, 0xd070ff];
@@ -171,14 +171,15 @@ function getPeerOpts() {
 }
 const JOIN_TIMEOUT = 20000;
 const MAX_PLAYERS = 4;
-const REPAIR_COST = 100;
+const REPAIR_GOLD_PER_HP = 0.75;   // repairs cost per point restored, so big hulls pay more
+function repairCost(s) { return s ? Math.max(20, Math.ceil((s.maxHp - s.hp) * REPAIR_GOLD_PER_HP)) : 0; }
 const UPGRADES = {
-  armor:   { icon: '🛡', name: 'Reinforced Hull', desc: '+25% max hull', max: 5, cost: [150, 250, 400, 600, 850] },
-  guns:    { icon: '💥', name: 'Heavy Shot', desc: '+20% cannon damage', max: 5, cost: [200, 320, 480, 700, 950] },
+  armor:   { icon: '🛡', name: 'Reinforced Hull', desc: '+30 max hull', max: 5, cost: [150, 250, 400, 600, 850] },
+  guns:    { icon: '💥', name: 'Heavy Shot', desc: '+2.5 damage per shot', max: 5, cost: [200, 320, 480, 700, 950] },
   reload:  { icon: '⏱', name: 'Drilled Gun Crews', desc: '-12% reload time', max: 5, cost: [150, 260, 400, 580, 800] },
   sails:   { icon: '⛵', name: 'Silk Sails', desc: '+10% speed & turning', max: 5, cost: [120, 220, 350, 520, 750] },
   cannons: { icon: '⚙', name: 'Extra Gun Ports', desc: '+1 cannon per side', max: 2, cost: [500, 900] },
-  repair:  { icon: '🔨', name: 'Field Repairs', desc: 'Restore full hull', max: Infinity },
+  repair:  { icon: '🔨', name: 'Field Repairs', desc: 'Restore full hull (price grows with damage)', max: Infinity },
 };
 const BOSS_NAMES = ['The Black Kraken', "Leviathan's Wrath", 'The Crimson Tide', 'Dread Galleon Morrow', 'The Sea Hag'];
 
@@ -383,6 +384,11 @@ const ENEMY_COLORS = [
   { hull: 0x4a3020, trim: 0x2f6a2f, sail: 0x3a3a3a, flag: 0x111111 },
   { hull: 0x5a1f1f, trim: 0xcfcfcf, sail: 0xe7c98a, flag: 0x6a1b9a },
 ];
+const ENEMY_TYPES = {
+  cutter: { scale: 1, masts: 2, guns: 4, hp: 1, speed: 0, turn: 0.55, reload: 1, bounty: 1 },
+  raider: { scale: 0.8, masts: 1, guns: 3, hp: 0.6, speed: 4, turn: 0.95, reload: 0.7, bounty: 0.9 },
+  heavy:  { scale: 1.3, masts: 3, guns: 6, hp: 1.9, speed: -3, turn: 0.38, reload: 1.25, bounty: 1.7 },
+};
 const BOSS_COLORS = { hull: 0x1c1a1a, trim: 0xb8860b, sail: 0x3a0c0c, flag: 0x8b0000 };
 
 // ============================================================
@@ -459,10 +465,10 @@ class Ship {
   applyStats(prof) {
     // class base stats, improved by upgrades
     const u = prof.up, b = SHIP_CLASSES[prof.design.cls];
-    const newMax = Math.round(b.hp * (1 + 0.25 * u.armor)), gain = newMax - this.maxHp;
+    const newMax = b.hp + 30 * u.armor, gain = newMax - this.maxHp;
     this.maxHp = newMax;
     if (gain > 0) this.hp += gain;
-    this.dmg = b.dmg * (1 + 0.2 * u.guns);
+    this.dmg = b.dmg + 2.5 * u.guns;
     this.reloadTime = b.reload * Math.pow(0.88, u.reload);
     this.maxSpeed = b.speed * (1 + 0.1 * u.sails);
     this.turnRate = b.turn * (1 + 0.1 * u.sails);
@@ -717,7 +723,7 @@ class Fort {
     const th = Math.atan((v2 - Math.sqrt(disc)) / (G * d)) + rand(-0.015, 0.015);
     const az = Math.atan2(tx - from.x, tz - from.z) + rand(-0.015, 0.015);
     const vel = new THREE.Vector3(Math.sin(az) * Math.cos(th), Math.sin(th), Math.cos(az) * Math.cos(th)).multiplyScalar(BALL_SPEED);
-    spawnBall(from, vel, this, { dmg: 10 });
+    spawnBall(from, vel, this, { dmg: 10 + 0.5 * wave });
     fx.muzzle(from, vel.clone().normalize());
     sfx('cannon', from);
   }
@@ -1108,7 +1114,7 @@ function updateAI(e, dt) {
           if (!isAlive(e)) return;
           const from = e.local(0, 4, -2);
           const vel = new THREE.Vector3((tx - from.x) / T, (0 - from.y + 0.5 * G * T * T) / T, (tz - from.z) / T);
-          spawnBall(from, vel, e, { aoe: 7, dmg: 14 });
+          spawnBall(from, vel, e, { aoe: 7, dmg: e.dmg + 4 });
           fx.muzzle(from, vel.clone().normalize());
           sfx('cannon', from);
         });
@@ -1298,14 +1304,20 @@ function startWave(n) {
   for (let i = 0; i < count; i++) {
     const [x, z] = spawnPoint(center, 170, 230);
     const ci = Math.floor(Math.random() * ENEMY_COLORS.length);
+    const roll = Math.random();
+    const type = n >= 6 && roll < 0.2 ? ENEMY_TYPES.heavy : n >= 3 && roll < 0.45 ? ENEMY_TYPES.raider : ENEMY_TYPES.cutter;
     const e = new Ship({
-      kind: 'e', colors: ENEMY_COLORS[ci], colorIdx: ci,
+      kind: 'e', colors: ENEMY_COLORS[ci], colorIdx: ci, scale: type.scale, masts: type.masts, cannons: type.guns,
       x, z, heading: Math.atan2(center.x - x, center.z - z),
-      maxHp: 45 + n * 12,
-      maxSpeed: Math.min(13.5, 9.5 + n * 0.5),
-      reloadTime: Math.max(1.9, 3.6 - n * 0.2),
+      maxHp: Math.round((45 + n * 12) * type.hp),
+      maxSpeed: Math.min(13.5, 9.5 + n * 0.5) + type.speed,
+      turnRate: type.turn,
+      reloadTime: Math.max(1.9, 3.6 - n * 0.2) * type.reload,
       aimErr: Math.max(0.025, 0.11 - n * 0.012),
+      dmg: 9 + 0.6 * n,               // enemy shots hit harder every wave
     });
+    e.bounty = type.bounty; e.aiType = type;
+    if (type === ENEMY_TYPES.raider) e.prefRange = rand(32, 45);
     e.speed = e.maxSpeed * 0.5;
     ships.push(e);
   }
@@ -1348,7 +1360,7 @@ function onShipSunk(s) {
     return;
   }
   // AI ship sunk: killer gets the full bounty, teammates a share
-  const reward = s.kind === 'b' ? 1000 * Math.max(1, wave / 5) : 100 * Math.max(1, wave);
+  const reward = Math.round(s.kind === 'b' ? 1000 * Math.max(1, wave / 5) : 100 * Math.max(1, wave) * (s.bounty || 1));
   for (const p of profiles.values()) {
     if (p === killer) { giveGold(p, reward); p.kills++; notify(`Enemy sunk! +${reward} gold`, p); }
     else { const share = Math.round(reward * 0.4); giveGold(p, share); notify(`Crewmate sank a ship! +${share} gold`, p); }
@@ -1397,7 +1409,7 @@ function applyBuy(prof, key) {
   let cost;
   if (key === 'repair') {
     if (!isAlive(s) || s.hp >= s.maxHp) return;
-    cost = REPAIR_COST;
+    cost = repairCost(s);
   } else {
     if (lvl >= u.max) return;
     cost = u.cost[lvl];
@@ -1505,7 +1517,7 @@ function buildSnapshot() {
     s: ships.filter(s => !s.dead && s !== menuShip).map(s => [
       s.id, s.kind, r2(s.pos.x), r2(s.pos.z), r2(s.heading), r2(s.speed), r2(s.sail),
       Math.ceil(s.hp), s.maxHp, s.sinking ? 1 : 0, s.colorIdx, s.cannonCount,
-      r2(s.reload.port), r2(s.reload.star), r2(s.reloadTime), s.pid, s.name, s.design ? designArr(s.design) : 0]),
+      r2(s.reload.port), r2(s.reload.star), r2(s.reloadTime), s.pid, s.name, s.design ? designArr(s.design) : s.aiType ? ['ai', s.aiType.scale, s.aiType.masts] : 0]),
     f: forts.map(f => [Math.ceil(f.hp), f.destroyed ? 1 : 0, r2(f.aim)]),
     c: crates.map(c => [c.id, r2(c.x), r2(c.z)]),
     p: [...profiles.values()].map(p => [p.id, p.name, p.gold, p.earned, p.kills,
@@ -1634,7 +1646,8 @@ function applySnapshot(m) {
     if (!s) {
       if (kind === 'p') s = makePlayerShip(designFromArr(des), { id, colorIdx: ci, x, z, heading: h, cannons: cn, maxHp });
       else s = new Ship({ kind, id, colors: kind === 'b' ? BOSS_COLORS : ENEMY_COLORS[ci % ENEMY_COLORS.length], colorIdx: ci,
-        x, z, heading: h, scale: kind === 'b' ? BOSS_SCALE : 1, masts: kind === 'b' ? 3 : 2, cannons: cn, maxHp });
+        x, z, heading: h, scale: kind === 'b' ? BOSS_SCALE : (des && des[0] === 'ai' ? des[1] : 1),
+        masts: kind === 'b' ? 3 : (des && des[0] === 'ai' ? des[2] : 2), cannons: cn, maxHp });
       s.remote = true; s.pid = pid; s.name = name; s.hp = hp;
       netShips.set(id, s); ships.push(s);
     }
@@ -1729,8 +1742,8 @@ function showShipyard() {
   const cards = Object.entries(SHIP_CLASSES).map(([key, c]) => `
     <div class="cls ${myDesign.cls === key ? 'sel' : ''}" data-cls="${key}">
       <div class="cn">${c.name}</div><div class="ct">${c.tag}</div>
-      ${statBar('Hull', c.hp / 190)}${statBar('Speed', c.speed / 19)}${statBar('Agility', c.turn / 1.15)}
-      ${statBar('Firepower', c.guns * c.dmg / 84)}${statBar('Reload', 1.7 / c.reload)}${statBar('Accuracy', 0.01 / c.spread)}
+      ${statBar('Hull', c.hp / 180)}${statBar('Speed', c.speed / 19)}${statBar('Agility', c.turn / 1.15)}
+      ${statBar('Firepower', c.guns * c.dmg / 72)}${statBar('Reload', 1.7 / c.reload)}${statBar('Accuracy', 0.01 / c.spread)}
       <div style="font-size:12px;opacity:.75;margin-top:4px">${c.guns} guns per side</div>
     </div>`).join('');
   const sw = (key, list) => list.map((col, i) =>
@@ -1868,7 +1881,7 @@ function renderShop() {
   for (const [key, u] of Object.entries(UPGRADES)) {
     const lvl = prof.up[key] || 0;
     const maxed = key !== 'repair' && lvl >= u.max;
-    const cost = key === 'repair' ? REPAIR_COST : (maxed ? 0 : u.cost[lvl]);
+    const cost = key === 'repair' ? repairCost(me) : (maxed ? 0 : u.cost[lvl]);
     const pips = key === 'repair' ? `<div class="pips">${me ? Math.ceil(me.hp) + ' / ' + me.maxHp : ''}</div>` : `<div class="pips">${'●'.repeat(lvl)}${'○'.repeat(u.max - lvl)}</div>`;
     const can = !maxed && prof.gold >= cost && (key !== 'repair' || (isAlive(me) && me.hp < me.maxHp));
     html += `<div class="card"><div class="cn">${u.icon} ${u.name}</div><div class="cd">${u.desc}</div>${pips}
