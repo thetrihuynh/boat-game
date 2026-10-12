@@ -60,7 +60,7 @@
   #bossbar .bar > div { background: linear-gradient(#ff6a5a, #9a1010); }
   #bossName { font-size: 20px; letter-spacing: 2px; color: #ffb0a0; margin-bottom: 4px; }
   #compass { position: absolute; top: 12px; right: 14px; }
-  #scoreboard { position: absolute; top: 168px; right: 18px; min-width: 200px; background: rgba(20,12,4,.55); border: 2px solid #c9a45c; border-radius: 8px; padding: 8px 12px; font-size: 14px; display: none; }
+  #scoreboard { position: absolute; top: 186px; right: 18px; min-width: 200px; background: rgba(20,12,4,.55); border: 2px solid #c9a45c; border-radius: 8px; padding: 8px 12px; font-size: 14px; display: none; }
   #scoreboard div { display: flex; justify-content: space-between; gap: 14px; }
   .tag { position: absolute; transform: translate(-50%, -100%); text-align: center; }
   .tag .nm { font-size: 13px; text-shadow: 0 1px 3px #000; white-space: nowrap; margin-bottom: 2px; }
@@ -128,7 +128,7 @@
     <div id="hint">[B] Shipwright — spend gold on upgrades</div>
   </div>
   <div id="bossbar"><div id="bossName"></div><div class="bar"><div id="bossFill"></div></div></div>
-  <canvas id="compass" width="130" height="150"></canvas>
+  <canvas id="compass" width="130" height="168"></canvas>
   <div id="scoreboard"></div>
   <div id="loadout"></div>
   <div id="bottom">
@@ -304,7 +304,8 @@ const sky = new THREE.Mesh(
 );
 scene.add(sky);
 
-scene.add(new THREE.HemisphereLight(0xd6ecff, 0x1d4a6b, 1.2));
+const hemi = new THREE.HemisphereLight(0xd6ecff, 0x1d4a6b, 1.2);
+scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xfff0d0, 2.4);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
@@ -312,6 +313,108 @@ Object.assign(sun.shadow.camera, { left: -70, right: 70, top: 70, bottom: -70, n
 sun.shadow.bias = -0.0005;
 scene.add(sun, sun.target);
 const SUN_OFFSET = new THREE.Vector3(90, 130, 40);
+// muzzle flashes briefly light the scene (most visible at night)
+const flashLight = new THREE.PointLight(0xffa040, 0, 90, 1.6);
+scene.add(flashLight);
+// stars and moon for the night sky
+const stars = (() => {
+  const n = 1800, pos = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const u = Math.random(), v = Math.random() * 0.9 + 0.1, th = u * Math.PI * 2, ph = Math.acos(v);
+    pos.set([Math.sin(ph) * Math.cos(th) * 1100, Math.cos(ph) * 1100, Math.sin(ph) * Math.sin(th) * 1100], i * 3);
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  return new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: 2.2, sizeAttenuation: false, transparent: true, opacity: 0, fog: false, depthWrite: false }));
+})();
+const moon = new THREE.Mesh(new THREE.CircleGeometry(38, 32), new THREE.MeshBasicMaterial({ color: 0xf2f0e0, transparent: true, opacity: 0, fog: false, depthWrite: false }));
+scene.add(stars, moon);
+// lightning bolt
+const boltGeo = new THREE.BufferGeometry(); boltGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(14 * 3), 3));
+const bolt = new THREE.Line(boltGeo, new THREE.LineBasicMaterial({ color: 0xeef4ff, fog: false, transparent: true, opacity: 1 }));
+bolt.visible = false; bolt.frustumCulled = false;
+scene.add(bolt);
+// rain
+const RAIN = 1400;
+const rainPos = new Float32Array(RAIN * 6), rainDrops = Array.from({ length: RAIN }, () => [rand(-70, 70), rand(0, 60), rand(-70, 70)]);
+const rainGeo = new THREE.BufferGeometry(); rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPos, 3));
+const rain = new THREE.LineSegments(rainGeo, new THREE.LineBasicMaterial({ color: 0xc8d8e8, transparent: true, opacity: 0, depthWrite: false }));
+rain.frustumCulled = false;
+scene.add(rain);
+
+const SKY = {
+  day: [new THREE.Color(0x2f78c4), new THREE.Color(0xa9d3ec)],
+  dusk: [new THREE.Color(0x3d4f8f), new THREE.Color(0xf2a36c)],
+  night: [new THREE.Color(0x081030), new THREE.Color(0x22325a)],
+  storm: [new THREE.Color(0x3a4450), new THREE.Color(0x6d7884)],
+  fog: [new THREE.Color(0x9aa6ae), new THREE.Color(0xb8c2c8)],
+};
+const _top = new THREE.Color(), _bot = new THREE.Color(), _c = new THREE.Color();
+const OCEAN_TINT = { day: new THREE.Color(0xffffff), night: new THREE.Color(0x7484b4), storm: new THREE.Color(0x8494a2) };
+// advance time and blend sky, light, fog and sea for the time of day and weather
+function updateEnvironment(dt, t, focus, host) {
+  env.dayT = (env.dayT + dt / DAY_LEN) % 1;
+  const fogT = env.weather === 'fog' ? 1 : 0, stormT = env.weather === 'storm' ? 1 : 0;
+  env.fogK += (fogT - env.fogK) * Math.min(1, dt * 0.25);
+  env.stormK += (stormT - env.stormK) * Math.min(1, dt * 0.2);
+  env.sea += ((1 + 0.9 * env.stormK) - env.sea) * Math.min(1, dt * 0.3);
+  if (host && env.stormK > 0.6) wind.targetS = Math.max(wind.targetS, 0.9);
+  const e = sunElev(), nk = nightK();
+  if (e >= 0.35) { _top.copy(SKY.day[0]); _bot.copy(SKY.day[1]); }
+  else if (e >= 0) { const k = e / 0.35; _top.copy(SKY.dusk[0]).lerp(SKY.day[0], k); _bot.copy(SKY.dusk[1]).lerp(SKY.day[1], k); }
+  else if (e > -0.25) { const k = (e + 0.25) / 0.25; _top.copy(SKY.night[0]).lerp(SKY.dusk[0], k); _bot.copy(SKY.night[1]).lerp(SKY.dusk[1], k); }
+  else { _top.copy(SKY.night[0]); _bot.copy(SKY.night[1]); }
+  const dim = 1 - nk * 0.75;
+  _top.lerp(_c.copy(SKY.storm[0]).multiplyScalar(dim), env.stormK * 0.8); _bot.lerp(_c.copy(SKY.storm[1]).multiplyScalar(dim), env.stormK * 0.8);
+  _top.lerp(_c.copy(SKY.fog[0]).multiplyScalar(dim), env.fogK * 0.7); _bot.lerp(_c.copy(SKY.fog[1]).multiplyScalar(dim), env.fogK * 0.75);
+  if (env.flash > 0) { _top.lerp(_c.set(0xe8eeff), env.flash * 0.7); _bot.lerp(_c.set(0xe8eeff), env.flash * 0.6); }
+  sky.material.uniforms.top.value.copy(_top);
+  sky.material.uniforms.bottom.value.copy(_bot);
+  scene.fog.color.copy(_bot);
+  scene.fog.near = 140 - 110 * env.fogK - 40 * env.stormK;
+  scene.fog.far = (430 - 280 * env.fogK - 120 * env.stormK) * (1 - 0.25 * nk);
+  const az = env.dayT * Math.PI * 2, el = Math.abs(e);
+  SUN_OFFSET.set(Math.cos(az) * 150 * Math.sqrt(1 - el * el) + 20, Math.max(0.12, el) * 160, Math.sin(az) * 150 * Math.sqrt(1 - el * el));
+  const weatherDim = (1 - 0.6 * env.stormK) * (1 - 0.35 * env.fogK);
+  if (e > -0.05) { sun.color.set(0xffa060).lerp(_c.set(0xfff0d0), clamp(e * 3, 0, 1)); sun.intensity = 2.4 * clamp(e * 3 + 0.15, 0, 1) * weatherDim; }
+  else { sun.color.set(0x9fb4ff); sun.intensity = 1.4 * nk * weatherDim; }   // moonlight
+  hemi.intensity = (1.2 - 0.6 * nk) * (1 - 0.35 * env.stormK) + env.flash * 3;
+  hemi.color.copy(_top).lerp(_c.set(0xffffff), 0.5);
+  ocean.material.color.copy(OCEAN_TINT.day).lerp(OCEAN_TINT.night, nk).lerp(OCEAN_TINT.storm, env.stormK * 0.7);
+  const starK = nk * (1 - env.stormK) * (1 - 0.8 * env.fogK);
+  stars.material.opacity = starK; stars.position.copy(camera.position);
+  moon.material.opacity = starK;
+  moon.position.set(camera.position.x - SUN_OFFSET.x * 5, camera.position.y + SUN_OFFSET.y * 4 + 60, camera.position.z - SUN_OFFSET.z * 5);
+  moon.lookAt(camera.position);
+  flashLight.intensity = Math.max(0, flashLight.intensity - dt * 9000);
+  env.flash = Math.max(0, env.flash - dt * 3.5);
+  bolt.visible = env.flash > 0.4;
+  if (env.stormK > 0.6) {
+    env.lightningT -= dt;
+    if (env.lightningT <= 0) {
+      env.lightningT = rand(5, 12); env.flash = 1;
+      const a = rand(0, Math.PI * 2), d = rand(140, 320), bp = boltGeo.attributes.position;
+      let x = focus.x + Math.sin(a) * d, z = focus.z + Math.cos(a) * d;
+      for (let i = 0; i < 14; i++) { bp.setXYZ(i, x, 160 - i * 12, z); x += rand(-9, 9); z += rand(-9, 9); }
+      bp.needsUpdate = true;
+      setTimeout(() => sfx('thunder'), rand(300, 1500));
+    }
+  }
+  const rk = env.stormK;
+  rain.material.opacity = rk * 0.55;
+  if (rk > 0.02) {
+    const wx = Math.sin(wind.angle) * 9 * wind.strength, wz = Math.cos(wind.angle) * 9 * wind.strength;
+    for (let i = 0; i < RAIN; i++) {
+      const d = rainDrops[i];
+      d[1] -= 70 * dt; d[0] += wx * dt; d[2] += wz * dt;
+      if (d[1] < 0 || Math.abs(d[0]) > 70 || Math.abs(d[2]) > 70) { d[0] = rand(-70, 70); d[1] = rand(40, 60); d[2] = rand(-70, 70); }
+      const x = camera.position.x + d[0], y = d[1] + focus.y, z = camera.position.z + d[2];
+      rainPos.set([x, y, z, x - wx * 0.06, y + 1.8, z - wz * 0.06], i * 6);
+    }
+    rainGeo.attributes.position.needsUpdate = true;
+  }
+  if (rainGain) rainGain.gain.value = rk * 0.18;
+}
+
 
 // ============================================================
 //  Ocean (CPU-displaced low-poly water that follows the camera focus)
@@ -378,12 +481,34 @@ function updateWind(dt) {
   wind.strength += (wind.targetS - wind.strength) * Math.min(1, dt * 0.1);
 }
 
+// ---------- day / night & weather ----------
+const DAY_LEN = 360;   // seconds for a full day
+// dayT: 0 midnight, 0.25 sunrise, 0.5 noon, 0.75 sunset. weather: clear | fog | storm
+const env = { dayT: 0.3, weather: 'clear', sea: 1, fogK: 0, stormK: 0, flash: 0, lightningT: 8 };
+function sunElev() { return Math.sin((env.dayT - 0.25) * Math.PI * 2); }
+function nightK() { return clamp(-sunElev() * 2.5 + 0.2, 0, 1); }
+function setWeather(w, quiet = false) {
+  if (env.weather === w) return;
+  env.weather = w;
+  if (quiet) return;
+  if (w === 'fog') announce('🌫 A thick fog rolls in — enemies stay hidden until close', 3);
+  else if (w === 'storm') announce('⛈ A storm is breaking — heavy seas and wild shots!', 3);
+  else announce('☀ The weather clears', 2);
+}
+function rollWeather(n, type) {
+  const r = Math.random();
+  if (type === 'kraken' || type === 'king') return r < 0.6 ? 'storm' : 'clear';
+  if (n >= 4 && r < 0.2) return 'storm';
+  if (n >= 3 && r < 0.38) return 'fog';
+  return 'clear';
+}
+
 function waveHeight(x, z, t) { return waveBase(x, z, t) * (1 - 0.6 * shallowAt(x, z)); }
 function waveBase(x, z, t) {
-  return 0.55 * Math.sin(x * 0.045 + t * 0.9)
+  return env.sea * (0.55 * Math.sin(x * 0.045 + t * 0.9)
        + 0.45 * Math.sin(z * 0.06 - t * 1.1)
        + 0.30 * Math.sin((x + z) * 0.09 + t * 1.6)
-       + 0.15 * Math.sin((x * 0.7 - z) * 0.17 - t * 2.1);
+       + 0.15 * Math.sin((x * 0.7 - z) * 0.17 - t * 2.1));
 }
 
 function updateOcean(t, cx, cz) {
@@ -457,6 +582,13 @@ function jollyRogerTexture() {
 }
 const JOLLY_ROGER = jollyRogerTexture();
 
+const HALO_TEX = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.3, 'rgba(255,220,160,.5)'); gr.addColorStop(1, 'rgba(255,200,120,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c);
+})();
 function buildShip(c, isPlayer, masts = 2) {
   const group = new THREE.Group();
   const M = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.85, flatShading: true, ...extra });
@@ -514,7 +646,14 @@ function buildShip(c, isPlayer, masts = 2) {
     ? new THREE.MeshStandardMaterial({ map: JOLLY_ROGER, side: THREE.DoubleSide, roughness: 0.9 })
     : M(c.flag, { side: THREE.DoubleSide });
   const flag = add(flagGeo, flagM, 0, mainH + 0.8, mainZ, 0, Math.PI / 2, 0);
-  return { group, sails, flag, ironM };
+  // lanterns at the stern and masthead, with a soft halo that shows at night
+  const lantM = new THREE.MeshStandardMaterial({ color: 0xffe0a0, emissive: 0xffb040, emissiveIntensity: 1 });
+  add(new THREE.SphereGeometry(0.28, 8, 6), lantM, 0, 3.5, -6.3);
+  add(new THREE.SphereGeometry(0.22, 8, 6), lantM, 0, 1.5 + (masts === 1 ? 14 : masts === 3 ? 10.5 : 11), masts === 1 ? 0.6 : masts === 3 ? 3.6 : 2.6);
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: HALO_TEX, color: 0xffc070, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+  halo.position.set(0, 3.5, -6.6); halo.scale.setScalar(5);
+  group.add(halo);
+  return { group, sails, flag, ironM, glowM, lantM, halo };
 }
 
 const PLAYER_CSS = ['#ffd34d', '#5ab0ff', '#6fe07a', '#d98aff'];
@@ -586,7 +725,7 @@ class Ship {
     this.isPlayer = kind === 'p';
     this.spread = spread;
     const b = buildShip(colors, this.isPlayer, masts);
-    this.mesh = b.group; this.sails = b.sails; this.flag = b.flag; this.ironM = b.ironM;
+    this.mesh = b.group; this.sails = b.sails; this.flag = b.flag; this.ironM = b.ironM; this.glowM = b.glowM; this.lantM = b.lantM; this.halo = b.halo;
     this.mesh.scale.setScalar(scale);
     this.cannonMeshes = [];
     this.setCannons(cannons);
@@ -771,6 +910,9 @@ class Ship {
     const s = 0.18 + 0.82 * this.sailVis;
     for (const sl of this.sails) { sl.mesh.scale.y = s; sl.mesh.position.y = sl.top - sl.h * s / 2; }
     this.flag.rotation.y = angDiff(wind.angle, this.heading) - Math.PI / 2 + Math.sin(t * 5 + this.pos.x) * 0.2;
+    const nk = nightK();
+    this.glowM.emissiveIntensity = 1.2 + 3 * nk; this.lantM.emissiveIntensity = 1 + 4 * nk;
+    this.halo.material.opacity = nk * 0.9;
     this.mesh.updateMatrixWorld();
   }
 
@@ -818,7 +960,7 @@ class Ship {
     const muzzle = this.local(sgn * 3.15, 1.05, cz);
     const sd = this.sideDir(side);
     const dir = new THREE.Vector3(sd.x * Math.cos(elev), Math.sin(elev), sd.z * Math.cos(elev));
-    dir.add(rv(this.spread)).normalize();
+    dir.add(rv(this.spread * (1 + 0.9 * env.stormK))).normalize();
     const vel = dir.clone().multiplyScalar(BALL_SPEED).addScaledVector(this.forward(), this.speed);
     spawnBall(muzzle, vel, this, { dmg: this.dmg * AMMO[ammo].dmg, ammo, base: this.dmg });
     fx.muzzle(muzzle, dir);
@@ -1322,6 +1464,7 @@ function drawChart(ctx, W, cx, cz, S, h, rim) {
     if (s === me || s.dead) continue;
     const col = s.sinking ? '#555' : s.role === 'convoy' ? '#ffffff' : s.role === 'merchant' ? '#ffd700' : s.kind === 'a' ? '#6fe07a' : s.kind === 'p' ? (gameMode === 'pvp' ? '#ff4a3a' : PLAYER_CSS[s.colorIdx % 4])
       : s.role === 'flag' ? '#ffc040' : s.role === 'fireship' ? '#ff9a20' : s.kind === 'b' ? '#ff2020' : '#ff4a3a';
+    if (teamOf(s) === 'E' && env.fogK > 0.5 && me && Math.hypot(s.pos.x - me.pos.x, s.pos.z - me.pos.z) > 150) continue;   // lost in the fog
     const [x, y] = arrow(s, col, s.kind === 'b' ? 9 : 5.5 * Math.max(0.85, s.scale));
     if (rim && Math.hypot(x - R, y - R) > R - 6 && teamOf(s) === 'E' && !s.sinking) offscreen.push([x, y, col]);
   }
@@ -1392,6 +1535,7 @@ function updateParticles(dt) {
 }
 const fx = {
   muzzle(pos, dir) {
+    if (pos.distanceTo(camera.position) < 160) { flashLight.position.copy(pos); flashLight.intensity = 1800; }
     for (let i = 0; i < 3; i++) P({ pos, vel: dir.clone().multiplyScalar(rand(4, 12)), color: 0xffb040, size: rand(0.5, 0.9), life: 0.14, grow: 5, basic: true });
     for (let i = 0; i < 7; i++) P({ windy: true, pos, vel: dir.clone().multiplyScalar(rand(2, 10)).add(rv(1.2)).addScaledVector(UP, 1), color: 0xdedede, size: rand(0.5, 0.9), life: rand(1.3, 2.4), grow: 1.7, drag: 1.6, opacity: 0.8 });
   },
@@ -1414,7 +1558,7 @@ const fx = {
     P({ pos, vel: rv(0.6).addScaledVector(UP, rand(2, 4)), color: Math.random() < 0.5 ? 0xff7a10 : 0xffc040, size: rand(0.4, 0.8), life: rand(0.3, 0.6), grow: -0.6, basic: true });
   },
   trail(pos) { P({ pos, color: 0xbbbbbb, size: 0.22, life: 0.45, grow: 0.8, opacity: 0.5 }); },
-  wake(pos, vel, sp) { P({ pos, vel, color: 0xf2fbff, size: 0.25 + sp * 0.25, life: 1.5, grow: 0.7, drag: 1, opacity: 0.4, basic: true }); },
+  wake(pos, vel, sp) { P({ pos, vel, color: 0xf2fbff, size: 0.25 + sp * 0.25, life: 1.5, grow: 0.7, drag: 1, opacity: 0.4 * (1 - 0.6 * nightK()), basic: true }); },
 };
 function fxHit(p, sc = 1) {
   fx.explosion(p.clone(), sc);
@@ -1433,7 +1577,7 @@ const _sm = new THREE.Matrix4(), _sq = new THREE.Quaternion(), _sv = new THREE.V
 function updateStreaks(dt, t, focus) {
   const sp = 6 + 10 * wind.strength, wx = Math.sin(wind.angle), wz = Math.cos(wind.angle);
   _sq.setFromAxisAngle(UP, wind.angle);
-  streakMesh.material.opacity = 0.08 + 0.2 * wind.strength;
+  streakMesh.material.opacity = (0.08 + 0.2 * wind.strength) * (1 - 0.75 * nightK());
   streaks.forEach((st, i) => {
     st.x += wx * sp * dt; st.z += wz * sp * dt;
     let dx = st.x - focus.x, dz = st.z - focus.z;
@@ -1778,11 +1922,12 @@ function losBlocked(ax, az, bx, bz) {
 }
 
 // telegraphed mortar barrage (boss and bomb ketches) — arcs right over islands
-function enemyMortar(e, tgt, n, spread, dmg, T = 2.6) {
-  const tf = tgt.forward();
-  const cx = tgt.pos.x + tf.x * tgt.speed * T * 0.85, cz = tgt.pos.z + tf.z * tgt.speed * T * 0.85;
+function enemyMortar(e, tgt, n, spread, dmg, T = 2.6, err = 0) {
+  const tf = tgt.forward(), ea = rand(0, Math.PI * 2), ed = err ? rand(err * 0.5, err) : 0;   // err: how far off the whole volley lands
+  const cx = tgt.pos.x + tf.x * tgt.speed * T * 0.85 + Math.sin(ea) * ed, cz = tgt.pos.z + tf.z * tgt.speed * T * 0.85 + Math.cos(ea) * ed;
   for (let i = 0; i < n; i++) {
-    const tx = cx + (i ? rand(-spread, spread) : 0), tz = cz + (i ? rand(-spread, spread) : 0);
+    const exact = i === 0 && !err;
+    const tx = cx + (exact ? 0 : rand(-spread, spread)), tz = cz + (exact ? 0 : rand(-spread, spread));
     const delay = i * 0.18;
     warnAt(tx, tz, T + delay);
     after(delay, () => {
@@ -1941,7 +2086,7 @@ function updateAI(e, dt) {
         const pf = tgt.forward();
         const lx = tgt.pos.x + pf.x * tgt.speed * tFlight - e.pos.x, lz = tgt.pos.z + pf.z * tgt.speed * tFlight - e.pos.z;
         const d2 = Math.hypot(lx, lz);
-        const elev = 0.5 * Math.asin(clamp(d2 * G / (BALL_SPEED * BALL_SPEED), 0, 1)) - 0.015 + rand(-1, 1) * e.aimErr;
+        const elev = 0.5 * Math.asin(clamp(d2 * G / (BALL_SPEED * BALL_SPEED), 0, 1)) - 0.015 + rand(-1, 1) * e.aimErr * (1 + 0.9 * env.stormK);
         e.fire(side, clamp(elev, -0.05, 0.75));
       }
     }
@@ -1952,7 +2097,7 @@ function updateAI(e, dt) {
     e.mortarT -= dt * e.reloadMul;
     if (e.mortarT <= 0 && dist < 175) {
       if (e.kind === 'b') { e.mortarT = rand(6, 8); enemyMortar(e, tgt, 5, 13, e.dmg + 4); }
-      else { e.mortarT = rand(8, 10); enemyMortar(e, tgt, 2, 7, e.dmg, 3.2); }
+      else { e.mortarT = rand(8, 10); enemyMortar(e, tgt, 2, 7, e.dmg, 3.2, 16); }
     }
   }
 }
@@ -1960,7 +2105,7 @@ function updateAI(e, dt) {
 // ============================================================
 //  Audio (synthesized with WebAudio)
 // ============================================================
-let actx = null, master, noiseBuf;
+let actx = null, master, noiseBuf, rainGain = null;
 function initAudio() {
   if (actx) { actx.resume(); return; }
   try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch { return; }
@@ -1976,6 +2121,11 @@ function initAudio() {
   const lg = actx.createGain(); lg.gain.value = 0.04;
   lfo.connect(lg).connect(g.gain); lfo.start();
   src.connect(f).connect(g).connect(master); src.start();
+  // rain bed, faded in by storms
+  const rs = actx.createBufferSource(); rs.buffer = noiseBuf; rs.loop = true;
+  const rf = actx.createBiquadFilter(); rf.type = 'highpass'; rf.frequency.value = 1500;
+  rainGain = actx.createGain(); rainGain.gain.value = 0;
+  rs.connect(rf).connect(rainGain).connect(master); rs.start();
 }
 function noiseBurst(vol, dur, type, f0, f1, q = 0.7) {
   const t = actx.currentTime;
@@ -2002,6 +2152,7 @@ function sfx(name, pos) {
     case 'hit': noiseBurst(0.9 * att, 0.7, 'lowpass', 3000, 200); tone(0.6 * att, 0.3, 140, 40, 'triangle'); break;
     case 'splash': noiseBurst(0.35 * att, 0.6, 'bandpass', 1800, 500, 0.8); break;
     case 'thud': noiseBurst(0.5 * att, 0.4, 'lowpass', 800, 100); break;
+    case 'thunder': noiseBurst(1.0, 3.2, 'lowpass', 500, 40); tone(0.6, 2.5, 55, 30); break;
     case 'boom': noiseBurst(1.2 * att, 2.2, 'lowpass', 1600, 60); tone(1.1 * att, 1.2, 70, 22); break;
     case 'clang': tone(0.18 * att, 0.12, rand(1100, 1600), 700, 'square'); noiseBurst(0.25 * att, 0.15, 'highpass', 3000, 2000); break;
     case 'pickup': tone(0.25, 0.15, 660, 880, 'triangle'); setTimeout(() => tone(0.25, 0.25, 880, 1320, 'triangle'), 110); break;
@@ -2115,6 +2266,7 @@ function startMatch() {
     i++;
   }
   gameActive = true; state = 'playing'; mySail = 2 / 3;
+  env.dayT = 0.3; setWeather('clear', true);
   setOverlay('');
   lockPointer();
   clock.getDelta();
@@ -2194,6 +2346,7 @@ function startWave(n) {
   const budgetMul = { treasure: 0.5, convoy: 0.8, siege: 0.45, kraken: 0, king: 0.55, boss: 0.5 }[type] ?? 1;
   const list = budgetMul ? buildFleetList(n, (1.2 + n * 1.25 + extra * 2) * budgetMul) : [];
   waveEvent = null; objective = { text: '', marker: null };
+  setWeather(rollWeather(n, type));
 
   // the whole fleet arrives together from one direction, in formation (or garrisons the besieged fort)
   const a = rand(0, Math.PI * 2);
@@ -2765,7 +2918,7 @@ function buildSnapshot() {
     p: [...profiles.values()].map(p => [p.id, p.name, p.gold, p.earned, p.kills,
       p.up, r2(p.respawnT), p.colorIdx, p.ammo, p.cd, p.board ? [p.board.phase, r2(p.board.phase === 'fight' ? p.board.t / p.board.dur : p.board.t), p.board.target.name || 'ship', boardLoot(p.board.target)] : 0]),
     k: kegs.map(k => [k.id, r2(k.x), r2(k.z)]),
-    env: [r2(wind.angle), r2(wind.strength)],
+    env: [r2(wind.angle), r2(wind.strength), +env.dayT.toFixed(4), env.weather],
     ev: net.events,
   };
 }
@@ -2882,7 +3035,7 @@ function handleEvent(ev) {
 
 function applySnapshot(m) {
   wave = m.w; gameMode = m.m;
-  if (m.env) { wind.angle = m.env[0]; wind.strength = m.env[1]; }
+  if (m.env) { wind.angle = m.env[0]; wind.strength = m.env[1]; if (m.env[2] != null) env.dayT = m.env[2]; if (m.env[3]) env.weather = m.env[3]; }
   const seen = new Set();
   let mine = null;
   for (const a of m.s) {
@@ -3462,7 +3615,7 @@ function updateTag(ent, wx, wy, wz, label, frac, color) {
   TV.set(wx, wy, wz);
   const dist = TV.distanceTo(camera.position);
   TV.project(camera);
-  if (TV.z > 1 || dist > 320) { d.style.display = 'none'; return; }
+  if (TV.z > 1 || dist > Math.min(320, scene.fog.far)) { d.style.display = 'none'; return; }
   d.style.display = 'block';
   d.style.left = ((TV.x * 0.5 + 0.5) * innerWidth) + 'px';
   d.style.top = ((-TV.y * 0.5 + 0.5) * innerHeight) + 'px';
@@ -3498,7 +3651,7 @@ function drawWindRose(ctx, cx, cy, h, R = 44) {
   ctx.restore();
 }
 function drawCompass() {
-  cmp.clearRect(0, 0, 130, 150);
+  cmp.clearRect(0, 0, 130, 168);
   drawWindRose(cmp, 65, 52, me ? me.heading : 0);
   cmp.fillStyle = '#fff'; cmp.beginPath(); cmp.moveTo(65, 40); cmp.lineTo(70, 56); cmp.lineTo(60, 56); cmp.closePath(); cmp.fill();
   const eff = me ? windFactor(me) / (0.9 + 0.2 * wind.strength) : 1;
@@ -3508,6 +3661,8 @@ function drawCompass() {
   cmp.fillText(`Sail trim ${Math.round(eff * 100)}%`, 65, 116);
   cmp.fillStyle = '#cfe8ff';
   cmp.fillText(`Wind from ${compassName(wind.angle + Math.PI)}`, 65, 134);
+  const e = sunElev();
+  cmp.fillText(env.weather === 'storm' ? '⛈ Storm' : env.weather === 'fog' ? '🌫 Fog' : e < -0.05 ? '🌙 Night' : e < 0.3 ? (env.dayT < 0.5 ? '🌅 Dawn' : '🌇 Dusk') : '☀ Day', 65, 152);
   cmp.shadowBlur = 0;
 }
 function toggleBigMap(v = !bigMapOpen) { bigMapOpen = v; $('bigmapWrap').style.display = v ? 'flex' : 'none'; }
@@ -3716,7 +3871,7 @@ function updateCamera(dt, focus) {
   if (shake > 0) { camera.position.add(rv(shake * 0.6)); shake = Math.max(0, shake - dt * 2.5); }
   camera.lookAt(target);
   sky.position.copy(camera.position);
-  sun.position.copy(target).add(SUN_OFFSET);
+  sun.position.copy(target).add(SUN_OFFSET);   // SUN_OFFSET follows the time of day
   sun.target.position.copy(target);
 }
 
@@ -3754,6 +3909,7 @@ function step(dt) {
   if (kraken) { kraken.update(dt, time, host && gameActive); if (kraken.dead) kraken = null; }
   updateBeacon(time);
   if (host) updateWind(dt);
+  updateEnvironment(dt, time, focusPos(), host);
   updateStreaks(dt, time, focusPos());
   updateParticles(dt);
   updateCrates(dt, time, host);
@@ -3775,7 +3931,7 @@ if (location.search.includes('debug')) window.__dbg = {
   profiles, islands, reefs, forts, fleet, shallowAt, startWave, applyBuy, useAbility, triggerAbility, selectAmmo,
   gold(n) { const p = profiles.get(myId); p.gold += n; },
   wind, sailEfficiency, windFactor, startBoarding, resolveBoarding, boardCandidate,
-  get kraken() { return kraken; }, spawnEnemyTest: spawnEnemy, get objective() { return objective; }, get waveEvent() { return waveEvent; }, eventFor,
+  get kraken() { return kraken; }, env, setWeather, spawnEnemyTest: spawnEnemy, get objective() { return objective; }, get waveEvent() { return waveEvent; }, eventFor,
   applyBurnTest(s, n, per) { s.lastHitT = -99; applyBurn(s, n, per, null); },
 };
 renderer.setAnimationLoop(() => {
