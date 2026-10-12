@@ -12,6 +12,7 @@ A 3D pirate ship battle game that runs in the browser (Three.js). Sail, aim your
 | Mouse | Look around & choose which side to fire |
 | ↑ / ↓ | Raise / lower cannons (shot range) |
 | Click / Space | Fire the broadside you're facing |
+| Right-click / X | Fire both broadsides at once |
 | Q / E | Swing aim to port / starboard (press again to fire) |
 | M | Big map |
 | 1 – 4 | Switch ammo: round / chain / fire / explosive |

@@ -2357,6 +2357,7 @@ const CONTROLS = `
     <tr><td>Mouse</td><td>Look around &amp; choose which side to fire</td></tr>
     <tr><td>↑ / ↓</td><td>Raise / lower the cannons (shot range)</td></tr>
     <tr><td>Click / Space</td><td>Fire the broadside you're facing</td></tr>
+    <tr><td>Right-click / X</td><td>Fire both broadsides at once (whichever are loaded)</td></tr>
     <tr><td>Q / E</td><td>Swing aim to port / starboard — press again to fire</td></tr>
     <tr><td>1 – 4</td><td>Switch ammo (once unlocked at the shipwright)</td></tr>
     <tr><td>C</td><td>Your ship class's signature move (smoke / rapid reload / all guns)</td></tr>
@@ -2795,6 +2796,14 @@ function aimOrFire(side) {
   camYawTarget = side === 'port' ? -SIDE_VIEW_YAW : SIDE_VIEW_YAW;
 }
 
+// right-click / X: fire every broadside that is loaded (each side keeps its own reload)
+function fireBoth() {
+  if (!isAlive(me) || me === menuShip) return;
+  const loaded = ['port', 'star'].filter(sd => me.reload[sd] <= 0);
+  if (!loaded.length) { toast('Both broadsides are reloading'); return; }
+  loaded.forEach(fireSide);
+}
+
 function fireSide(side) {
   if (!isAlive(me) || me === menuShip) return;
   const elev = aimElevation();
@@ -2948,6 +2957,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyF') triggerAbility('kegs');
   if (e.code === 'KeyR') triggerAbility('mortar');
   if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') triggerAbility('boost');
+  if (e.code === 'KeyX') fireBoth();
   if (e.code === 'KeyQ') aimOrFire('port');
   if (e.code === 'KeyE') aimOrFire('star');
   if (e.code === 'Space') { fireSide(aimSide()); e.preventDefault(); }
@@ -2959,8 +2969,10 @@ canvas.addEventListener('mousedown', (e) => {
   if (state !== 'playing' || shopOpen) return;
   if (!document.pointerLockElement) { lockPointer(); return; }
   if (e.button === 0) fireSide(aimSide());
+  if (e.button === 2) fireBoth();
 });
 addEventListener('mouseup', () => { mouseDown = false; });
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());   // right-click is a game control
 addEventListener('mousemove', (e) => {
   if (state !== 'playing' || shopOpen) return;
   if (!document.pointerLockElement && !mouseDown) return;
