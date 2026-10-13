@@ -79,12 +79,18 @@
   body.touch #toast, body.touch #boardHint { font-size: 17px; }
   body.touch #stick { width: 130px; height: 130px; left: 16px; bottom: 16px; }
   #respawn { position: absolute; top: 45%; width: 100%; text-align: center; font-size: 30px; text-shadow: 0 2px 6px #000; }
-  #bossbar { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); width: 440px; text-align: center; display: none; text-shadow: 0 2px 4px #000; }
+  #bossbar { position: absolute; top: 62px; left: 50%; transform: translateX(-50%); width: 440px; text-align: center; display: none; text-shadow: 0 2px 4px #000; }
   #bossbar .bar { height: 16px; border-color: #b8860b; }
   #bossbar .bar > div { background: linear-gradient(#ff6a5a, #9a1010); }
   #bossName { font-size: 20px; letter-spacing: 2px; color: #ffb0a0; margin-bottom: 4px; }
   #compass { position: absolute; top: 12px; right: 14px; }
-  #scoreboard { position: absolute; top: 186px; right: 18px; min-width: 200px; background: rgba(20,12,4,.55); border: 2px solid #c9a45c; border-radius: 8px; padding: 8px 12px; font-size: 14px; display: none; }
+  #navtape { position: absolute; top: 6px; left: 50%; transform: translateX(-50%); }
+  #waypoint { position: absolute; transform: translate(-50%, -100%); text-align: center; display: none; text-shadow: 0 2px 4px #000; animation: bob 1.6s ease-in-out infinite; }
+  #waypoint .wpi { font-size: 26px; line-height: 1; }
+  #waypoint .wpd { font-size: 13px; font-weight: bold; color: #ffe28a; }
+  @keyframes bob { 50% { margin-top: -6px; } }
+  body.touch #navtape { transform: translateX(-50%) scale(.7); transform-origin: top center; }
+  #scoreboard { position: absolute; top: 204px; right: 18px; min-width: 200px; background: rgba(20,12,4,.55); border: 2px solid #c9a45c; border-radius: 8px; padding: 8px 12px; font-size: 14px; display: none; }
   #scoreboard div { display: flex; justify-content: space-between; gap: 14px; }
   .tag { position: absolute; transform: translate(-50%, -100%); text-align: center; }
   .tag .nm { font-size: 13px; text-shadow: 0 1px 3px #000; white-space: nowrap; margin-bottom: 2px; }
@@ -210,7 +216,9 @@
     <div id="hint">[B] Shipwright · [H] Repair kit</div>
   </div>
   <div id="bossbar"><div id="bossName"></div><div class="bar"><div id="bossFill"></div></div></div>
-  <canvas id="compass" width="130" height="168"></canvas>
+  <canvas id="compass" width="130" height="186"></canvas>
+  <canvas id="navtape" width="560" height="50"></canvas>
+  <div id="waypoint"><div class="wpi"></div><div class="wpd"></div></div>
   <div id="scoreboard"></div>
   <div id="loadout"></div>
   <div id="bottom">
@@ -347,11 +355,12 @@ const ABILITIES = {
 function freshUp() {
   return { armor: 0, guns: 0, reload: 0, sails: 0, cannons: 0, carpenters: 0, ammo_chain: 0, ammo_fire: 0, ammo_explosive: 0, kegs: 0, mortar: 0, boost: 0, kit: 1 };
 }
-const REPAIR_GOLD_PER_HP = 0.75;   // repairs cost per point restored, so big hulls pay more
-function repairCost(s) { return s ? Math.max(20, Math.ceil((s.maxHp - s.hp) * REPAIR_GOLD_PER_HP)) : 0; }
+// repairs cost per point restored (so big hulls pay more) and get dearer each wave, so they stay a real choice
+function repairCost(s) { return s ? Math.max(20, Math.ceil((s.maxHp - s.hp) * (0.5 + 0.06 * Math.max(1, wave)))) : 0; }
+function kitCost() { return 60 + 20 * Math.max(1, wave); }
 // Full repairs and restocking kits only happen out of combat, so the shop can't be used as a mid-fight heal.
 // In a fight the captain relies on repair kits: a heal over time with a cooldown and a small stock.
-const KIT_COST = 120, KIT_MAX = 3, KIT_HEAL = 0.4, KIT_TIME = 6, KIT_CD = 20, COMBAT_CALM = 8, COMBAT_RANGE = 80;
+const KIT_MAX = 3, KIT_HEAL = 0.4, KIT_TIME = 6, KIT_CD = 20, COMBAT_CALM = 8, COMBAT_RANGE = 80;
 // why a ship counts as in combat: '' when calm, else a short reason for the shop
 function combatReason(s) {
   if (!isAlive(s)) return '';
@@ -363,9 +372,10 @@ function combatReason(s) {
   return '';
 }
 const UPGRADES = {
-  armor:   { icon: '🛡', name: 'Reinforced Hull', desc: '+30 max hull', max: 5, cost: [150, 250, 400, 600, 850] },
-  guns:    { icon: '💥', name: 'Heavy Shot', desc: '+2.5 damage per shot', max: 5, cost: [200, 320, 480, 700, 950] },
-  reload:  { icon: '⏱', name: 'Drilled Gun Crews', desc: '-12% reload time', max: 5, cost: [150, 260, 400, 580, 800] },
+  // levels 6-10 are pricier "master" levels with a smaller effect, a late-game gold sink that keeps up with the enemy
+  armor:   { icon: '🛡', name: 'Reinforced Hull', desc: '+30 max hull (master levels 6–10: +25)', max: 10, cost: [150, 250, 400, 600, 850, 1100, 1400, 1750, 2150, 2600] },
+  guns:    { icon: '💥', name: 'Heavy Shot', desc: '+2.5 damage per shot (master levels 6–10: +1.5)', max: 10, cost: [200, 320, 480, 700, 950, 1250, 1600, 2000, 2450, 2950] },
+  reload:  { icon: '⏱', name: 'Drilled Gun Crews', desc: '-12% reload time (master levels 6–10: -6%)', max: 10, cost: [150, 260, 400, 580, 800, 1050, 1350, 1700, 2100, 2550] },
   sails:   { icon: '⛵', name: 'Silk Sails', desc: '+10% speed & turning', max: 5, cost: [120, 220, 350, 520, 750] },
   cannons: { icon: '⚙', name: 'Extra Gun Ports', desc: '+1 cannon per side', max: 2, cost: [500, 900] },
   carpenters: { icon: '🪚', name: "Ship's Carpenters", desc: '+30% auto-repair speed, starts sooner', max: 5, cost: [200, 350, 550, 800, 1100] },
@@ -877,7 +887,7 @@ function awardRenown(won) {
   const prof = myProf();
   if (!prof) return 0;
   const de = (prof.earned || 0) - awardBase.earned, dw = wave - awardBase.wave, dk = (prof.kills || 0) - awardBase.kills;
-  const r = Math.max(0, Math.round((Math.floor(de / 100) + dw * 5 + dk * 2 + (won ? 100 : 0)) * DIFF.renown));
+  const r = Math.max(0, Math.round((Math.floor(de / 40) + dw * 5 + dk * 2 + (won ? 100 : 0)) * DIFF.renown));
   awardBase = { earned: prof.earned || 0, wave, kills: prof.kills || 0 };
   save.renown += r;
   save.bestWave = Math.max(save.bestWave, wave);
@@ -972,11 +982,12 @@ class Ship {
   applyStats(prof) {
     // class base stats, improved by upgrades
     const u = prof.up, b = SHIP_CLASSES[prof.design.cls];
-    const newMax = b.hp + 30 * u.armor, gain = newMax - this.maxHp;
+    const mst = (L) => Math.max(0, L - 5);   // master levels beyond 5
+    const newMax = b.hp + 30 * Math.min(5, u.armor) + 25 * mst(u.armor), gain = newMax - this.maxHp;
     this.maxHp = newMax;
     if (gain > 0) this.hp += gain;
-    this.dmg = b.dmg + 2.5 * u.guns;
-    this.reloadTime = b.reload * Math.pow(0.88, u.reload);
+    this.dmg = b.dmg + 2.5 * Math.min(5, u.guns) + 1.5 * mst(u.guns);
+    this.reloadTime = b.reload * Math.pow(0.88, Math.min(5, u.reload)) * Math.pow(0.94, mst(u.reload));
     this.maxSpeed = b.speed * (1 + 0.1 * u.sails);
     this.turnRate = b.turn * (1 + 0.1 * u.sails);
     this.spread = b.spread;
@@ -2166,7 +2177,7 @@ function updateFleet(dt) {
     fleet.target = best;
   }
   // fairness: only a handful of ships press the attack on the focus target; the rest wait on an outer ring
-  const slots = Math.max(2, Math.min(6, 3 + Math.floor(wave / 4)) + 2 * Math.max(0, profiles.size - 1) + DIFF.slots);
+  const slots = Math.max(2, Math.min(5, 3 + Math.floor(wave / 4)) + 2 * Math.max(0, profiles.size - 1) + DIFF.slots);
   const t = fleet.target;
   const brawlers = foes.filter(e => e.role !== 'fireship' && e.role !== 'ketch' && e.role !== 'merchant' && e.kind !== 'b');
   if (t) brawlers.sort((a, b) => Math.hypot(a.pos.x - t.pos.x, a.pos.z - t.pos.z) - Math.hypot(b.pos.x - t.pos.x, b.pos.z - t.pos.z));
@@ -2275,7 +2286,7 @@ function updateAI(e, dt) {
       const th = nearestPlayerShip(e.pos.x, e.pos.z, 70);
       if (th) desired += angDiff(Math.atan2(e.pos.x - th.pos.x, e.pos.z - th.pos.z), desired) * 0.35;
     }
-    e.sail = e.role === 'convoy' ? 2 / 3 : 1;
+    e.sail = e.role === 'convoy' || (e.role === 'merchant' && time - e.lastHitT > 10 && !nearestPlayerShip(e.pos.x, e.pos.z, 90)) ? 2 / 3 : 1;
     e.steer = clamp(angDiff(avoidObstacles(e, desired), e.heading) * 2, -1, 1);
     return;
   }
@@ -2286,6 +2297,18 @@ function updateAI(e, dt) {
     tgt = isAlive(fleet.target) && !(fleet.target.smokeT > 0) ? fleet.target : nearestPlayerShip(e.pos.x, e.pos.z);
     const near = role !== 'fireship' && nearestPlayerShip(e.pos.x, e.pos.z, 40 * sc);   // fight back at close range
     if (near) tgt = near;
+  }
+  if (!ally && e.guard) {
+    const g = e.guard;
+    if (!isAlive(g) || g.kind !== 'e' || time - e.lastHitT < 8 || time - g.lastHitT < 8 || (tgt && Math.hypot(tgt.pos.x - g.pos.x, tgt.pos.z - g.pos.z) < 110)) e.guard = null;   // break formation and fight
+    else {
+      const sa = g.heading + e.guardA, px = g.pos.x + Math.sin(sa) * e.guardD, pz = g.pos.z + Math.cos(sa) * e.guardD;
+      const dd = Math.hypot(px - e.pos.x, pz - e.pos.z);
+      let want = dd > 8 ? Math.atan2(px - e.pos.x, pz - e.pos.z) : g.heading;
+      e.sail = dd > 30 ? 1 : dd > 10 ? 2 / 3 : 1 / 3;
+      e.steer = clamp(angDiff(avoidObstacles(e, want), e.heading) * 2, -1, 1);
+      return;
+    }
   }
   let desired, dx = 0, dz = 0, dist = Infinity, blocked = false;
   const lead = ally && e.ownerProf && isAlive(e.ownerProf.ship) ? e.ownerProf.ship : null;
@@ -2655,7 +2678,7 @@ function startMatch() {
     Object.assign(p, { treasure: null, gold: 0, earned: 0, kills: 0, up: freshUp(), ammo: 'round', cd: { kegs: 0, mortar: 0, boost: 0, special: 0, kit: 0 }, respawnT: 0, input: { steer: 0, sail: 2 / 3 } });
     // renown bonuses, and a war chest when starting at a later wave
     p.trait = TRAITS[m.trait] ? m.trait : '';
-    p.gold = clamp(m.seed | 0, 0, 3) * 200 + (startWaveSel - 1) * 300;
+    p.gold = clamp(m.seed | 0, 0, 3) * 200 + 85 * (startWaveSel - 1) ** 2;   // about what a run has earned by then
     if (m.chain) p.up.ammo_chain = 1;
     if (m.armor) p.up.armor = 1;
     if (gameMode === 'pvp') { const a = i / n * Math.PI * 2; spawnPlayerShip(p, Math.sin(a) * 90, Math.cos(a) * 90, a + Math.PI / 2); }
@@ -2709,9 +2732,9 @@ function spawnEnemy(type, n, x, z, heading, veteran = false) {
     maxHp: Math.round((45 + n * 12) * type.hp * (veteran ? 1.35 : 1) * DIFF.hp),
     maxSpeed: Math.min(13.5, 9.5 + n * 0.5) + type.speed,
     turnRate: type.turn,
-    reloadTime: Math.max(1.9, 3.6 - n * 0.2) * type.reload,
-    aimErr: Math.max(0.025, 0.11 - n * 0.012) * (veteran ? 0.5 : 1),
-    dmg: (9 + 0.6 * n) * (type.dmg || 1) * (veteran ? 1.2 : 1) * DIFF.dmg,   // enemy shots hit harder every wave; light ships hit softer
+    reloadTime: Math.max(1.9, 3.6 - n * 0.11) * type.reload,   // peaks around wave 15
+    aimErr: Math.max(0.025, 0.11 - n * 0.0055) * (veteran ? 0.5 : 1),
+    dmg: (9 + 0.45 * n) * (type.dmg || 1) * (veteran ? 1.2 : 1) * DIFF.dmg,   // enemy shots hit harder every wave; light ships hit softer
   });
   e.aiType = type; e.role = type.role; if (type.windEff != null) e.windEff = type.windEff; e.bounty = type.bounty * (veteran ? 1.5 : 1);
   e.name = veteran ? '★ ' + (type.label || 'Veteran') : type.label;
@@ -2745,7 +2768,7 @@ function startWave(n) {
   let type = eventFor(n);
   const siegeFort = type === 'siege' ? forts.filter(f => !f.destroyed).sort((a, b) => Math.hypot(a.x - center.x, a.z - center.z) - Math.hypot(b.x - center.x, b.z - center.z))[0] : null;
   if (type === 'siege' && !siegeFort) type = null;
-  const budgetMul = { treasure: 0.5, convoy: 0.8, siege: 0.45, kraken: 0, king: 0.55, boss: 0.5 }[type] ?? 1;
+  const budgetMul = { treasure: 0.6, convoy: 0.8, siege: 0.45, kraken: 0, king: 0.55, boss: 0.5 }[type] ?? 1;
   const list = budgetMul ? buildFleetList(n, (1.2 + n * 1.25 + extra * 2) * budgetMul) : [];
   waveEvent = null; objective = { text: '', marker: null };
   setWeather(rollWeather(n, type));
@@ -2756,9 +2779,14 @@ function startWave(n) {
   fleet.angle = a; fleet.target = null; fleet.retargetT = 0; fleet.brokenT = 0;
   const line = list.filter(t => t.role === 'line').length;
   let li = 0, vets = 0;
+  // treasure wave: the galleon sails past close by, and the wave's fleet escorts her in formation
+  const tg = type === 'treasure' ? spawnTreasure(center, n) : null;
   list.forEach((t, i) => {
     let x, z;
-    if (siegeFort) { const g = rand(0, Math.PI * 2), d = rand(45, 75); x = siegeFort.x + Math.sin(g) * d; z = siegeFort.z + Math.cos(g) * d; }
+    if (tg) {
+      const ga = tg.heading + (i / list.length) * Math.PI * 2, gd = 32 + 8 * (i % 2);
+      x = tg.pos.x + Math.sin(ga) * gd; z = tg.pos.z + Math.cos(ga) * gd;
+    } else if (siegeFort) { const g = rand(0, Math.PI * 2), d = rand(45, 75); x = siegeFort.x + Math.sin(g) * d; z = siegeFort.z + Math.cos(g) * d; }
     else {
       let fwd = 0, lat = (i - (list.length - 1) / 2) * 22;
       if (t.role === 'heavy' || t.role === 'flag') fwd = -25;
@@ -2773,13 +2801,14 @@ function startWave(n) {
     const e = spawnEnemy(t, n, x, z, Math.atan2(center.x - x, center.z - z), veteran);
     if (t.role === 'line') { e.slotOff = line > 1 ? (li / (line - 1) - 0.5) * 2.6 : 0; li++; }
     e.flank = i % 2 ? 1 : -1;
+    if (tg) { e.guard = tg; e.guardA = (i / list.length) * Math.PI * 2; e.guardD = 32 + 8 * (i % 2); e.heading = tg.heading; }
   });
 
   switch (type) {
     case 'boss': spawnBossShip(center, dir, n, extra); break;
     case 'king': spawnPirateKing(center, dir, n, extra); break;
     case 'kraken': spawnKraken(center, extra); break;
-    case 'treasure': spawnTreasure(center, n); break;
+    case 'treasure': announce('💰 A treasure galleon and her escorts are passing close by!', 3); sfxFor('bell'); break;
     case 'convoy': spawnConvoy(center, n); break;
     case 'siege': startSiege(siegeFort, extra); break;
     default: announce(`Wave ${n} — ${list.length} ships approach!`); sfxFor('bell');
@@ -2798,7 +2827,7 @@ function spawnBossShip(center, dir, n, extra) {
   const boss = new Ship({
     kind: 'b', colors: BOSS_COLORS, masts: 3, x, z, heading: Math.atan2(center.x - x, center.z - z),
     scale: BOSS_SCALE, cannons: 6, maxHp: Math.round((450 + 200 * (k - 1) + 120 * extra) * DIFF.hp), maxSpeed: 9.5,
-    reloadTime: 2.4, aimErr: 0.04, turnRate: 0.4, dmg: (12 + 0.6 * n) * DIFF.dmg,
+    reloadTime: 2.4, aimErr: 0.04, turnRate: 0.4, dmg: (12 + 0.45 * n) * DIFF.dmg,
   });
   boss.name = BOSS_NAMES[(k - 1) % BOSS_NAMES.length];
   boss.mortarT = 6; boss.prefRange = rand(65, 85); boss.speed = 5; boss.role = 'heavy';
@@ -2822,17 +2851,18 @@ function spawnPirateKing(center, dir, n, extra) {
   sfxFor('boss');
 }
 
+// the galleon appears in sight (~170 m off) and sails across the captains' bow, not away from them
+const TREASURE_RUN = 600;   // how far the galleon sails before she escapes
 function spawnTreasure(center, n) {
-  const a = rand(0, Math.PI * 2);
-  const [x, z] = clearSpot(center.x + Math.sin(a) * 150, center.z + Math.cos(a) * 150, true);
-  const e = new Ship({ kind: 'e', colors: ENEMY_COLORS[6], colorIdx: 6, scale: 1.4, masts: 3, cannons: 2, x, z, heading: a,
-    maxHp: Math.round((45 + 12 * n) * 3 * DIFF.hp), maxSpeed: 11.5, turnRate: 0.45, reloadTime: 3, aimErr: 0.1, dmg: 8 });
+  const a = rand(0, Math.PI * 2), h = a + (Math.random() < 0.5 ? 1 : -1) * Math.PI / 2;
+  const [x, z] = clearSpot(center.x + Math.sin(a) * 160 - Math.sin(h) * 70, center.z + Math.cos(a) * 160 - Math.cos(h) * 70, true);
+  const e = new Ship({ kind: 'e', colors: ENEMY_COLORS[6], colorIdx: 6, scale: 1.4, masts: 3, cannons: 2, x, z, heading: h,
+    maxHp: Math.round((45 + 12 * n) * 3 * DIFF.hp), maxSpeed: 8.5, turnRate: 0.45, reloadTime: 3, aimErr: 0.1, dmg: 8 });
   e.role = 'merchant'; e.name = '💰 Treasure Galleon'; e.bounty = 6; e.aiType = { scale: 1.4, masts: 3, label: 'Treasure Galleon' };
-  e.speed = 6; e.goal = { x: x + Math.sin(a) * 600, z: z + Math.cos(a) * 600 }; e.start = { x, z };
+  e.speed = 5; e.goal = { x: x + Math.sin(h) * 800, z: z + Math.cos(h) * 800 }; e.start = { x, z };
   ships.push(e);
   waveEvent = { type: 'treasure', ship: e };
-  announce('💰 A treasure galleon is making a run for it!', 3);
-  sfxFor('bell');
+  return e;
 }
 
 function spawnConvoy(center, n) {
@@ -2874,7 +2904,7 @@ function updateEvent(dt) {
   if (ev.type === 'treasure') {
     const e = ev.ship;
     if (!isAlive(e) || e.kind !== 'e') { ev.done = true; if (e.kind === 'a') announce('💰 The treasure galleon is ours!', 3); return; }
-    const left = 470 - Math.hypot(e.pos.x - e.start.x, e.pos.z - e.start.z);
+    const left = TREASURE_RUN - Math.hypot(e.pos.x - e.start.x, e.pos.z - e.start.z);
     if (left <= 0) { e.remove(); ev.done = true; announce('The treasure galleon escaped over the horizon…', 3); return; }
     objective = { text: `💰 Catch the treasure galleon — ${Math.round(left)} m from escaping (board her for a fortune!)`, marker: [e.pos.x, e.pos.z, 'treasureShip'] };
   } else if (ev.type === 'convoy') {
@@ -2961,7 +2991,7 @@ function onShipSunk(s) {
     return;
   }
   // AI ship sunk: killer gets the full bounty, teammates a share
-  const reward = Math.round(s.kind === 'b' ? 1000 * Math.max(1, wave / 5) : 100 * Math.max(1, wave) * (s.bounty || 1));
+  const reward = s.kind === 'b' ? 600 + 60 * Math.max(1, wave) : killBounty(s.bounty || 1);
   for (const p of profiles.values()) {
     if (p === killer) { giveGold(p, reward); p.kills++; notify(`Enemy sunk! +${reward} gold`, p); }
     else { const share = Math.round(reward * 0.4); giveGold(p, share); notify(`Crewmate sank a ship! +${share} gold`, p); }
@@ -2982,7 +3012,9 @@ function boardCandidate(s) {
   for (const e of ships) if (boardable(s, e)) { const d = Math.hypot(e.pos.x - s.pos.x, e.pos.z - s.pos.z); if (d < bd) { bd = d; best = e; } }
   return best;
 }
-function boardLoot(e) { return Math.round(100 * Math.max(1, wave) * (e.bounty || 1)); }
+// kill bounty grows gently with the wave (fleet size already grows), so gold doesn't snowball past the shop
+function killBounty(mul = 1) { return Math.round((60 + 15 * Math.max(1, wave)) * mul); }
+function boardLoot(e) { return killBounty(e.bounty || 1); }
 function startBoarding(prof) {
   const s = prof.ship;
   if (prof.board || !isAlive(s)) return;
@@ -3223,7 +3255,7 @@ function applyBuy(prof, key) {
     cost = repairCost(s);
   } else if (key === 'kit') {
     if (lvl >= KIT_MAX) return;
-    cost = KIT_COST;
+    cost = kitCost();
   } else {
     if (lvl >= u.max) return;
     cost = u.cost[lvl];
@@ -3909,7 +3941,7 @@ function itemState(prof, key, u, why, escorts) {
   if (key === 'kit') {
     const info = `In the hold: ${'🧰'.repeat(lvl)}${'▫'.repeat(KIT_MAX - lvl)} ${lvl}/${KIT_MAX}`;
     if (lvl >= KIT_MAX) return { stamp: 'HOLD FULL', info, can: false };
-    return { cost: KIT_COST, info, note: why ? `⚔ Restock once out of combat (${why}) — use kits with H` : '', can: !why && gold >= KIT_COST };
+    return { cost: kitCost(), info, note: why ? `⚔ Restock once out of combat (${why}) — use kits with H` : '', can: !why && gold >= kitCost() };
   }
   if (key === 'escort') {
     if (gameMode !== 'coop') return { stamp: 'CO-OP ONLY', info: '', can: false };
@@ -4273,6 +4305,15 @@ function drawWindRose(ctx, cx, cy, h, R = 44) {
     ctx.fillStyle = i === 0 ? '#ff7060' : '#f6e7c1';
     ctx.fillText('NESW'[i], cx + x * (R - 9), cy + y * (R - 9));
   }
+  // points of sail on the rim: green = best (beam reach), red = into the wind (crawling)
+  ctx.lineWidth = 5;
+  for (let k = 0; k < 72; k++) {
+    const a = k / 72 * Math.PI * 2, eff = sailEfficiency(a);
+    if (eff > 1.06) ctx.strokeStyle = 'rgba(120,240,140,.85)'; else if (eff < 0.75) ctx.strokeStyle = 'rgba(255,90,70,.85)'; else continue;
+    const [x1, y1] = windRoseDir(h, a), [x2, y2] = windRoseDir(h, a + Math.PI * 2 / 72 + 0.01), r = R - 2.5;
+    ctx.beginPath(); ctx.moveTo(cx + x1 * r, cy + y1 * r); ctx.lineTo(cx + x2 * r, cy + y2 * r); ctx.stroke();
+  }
+  ctx.lineWidth = 3;
   // wind arrow (points where the wind blows to); length shows strength
   const [wx, wy] = windRoseDir(h, wind.angle), L = (R - 16) * (0.55 + 0.45 * wind.strength);
   ctx.strokeStyle = '#9fe3ff'; ctx.fillStyle = '#9fe3ff'; ctx.lineWidth = 3;
@@ -4283,19 +4324,94 @@ function drawWindRose(ctx, cx, cy, h, R = 44) {
   ctx.restore();
 }
 function drawCompass() {
-  cmp.clearRect(0, 0, 130, 168);
+  cmp.clearRect(0, 0, 130, 186);
   drawWindRose(cmp, 65, 52, me ? me.heading : 0);
   cmp.fillStyle = '#fff'; cmp.beginPath(); cmp.moveTo(65, 40); cmp.lineTo(70, 56); cmp.lineTo(60, 56); cmp.closePath(); cmp.fill();
   const eff = me ? windFactor(me) / (0.9 + 0.2 * wind.strength) : 1;
   cmp.font = '13px Georgia'; cmp.textAlign = 'center'; cmp.textBaseline = 'alphabetic';
   cmp.fillStyle = eff > 0.98 ? '#8dffa0' : eff > 0.8 ? '#ffe28a' : '#ff9a80';
   cmp.shadowColor = '#000'; cmp.shadowBlur = 3;
-  cmp.fillText(`Sail trim ${Math.round(eff * 100)}%`, 65, 116);
+  cmp.fillText(`Sail trim ${Math.round(eff * 100)}%`, 65, 134);
+  cmp.fillStyle = '#ffe9b0'; cmp.font = 'bold 14px Georgia';
+  cmp.fillText(me ? `Heading ${String(Math.round(bearingDeg(me.heading))).padStart(3, '0')}° ${compassName(me.heading)}` : '', 65, 116);
+  cmp.font = '13px Georgia';
   cmp.fillStyle = '#cfe8ff';
-  cmp.fillText(`Wind from ${compassName(wind.angle + Math.PI)}`, 65, 134);
+  cmp.fillText(`Wind from ${compassName(wind.angle + Math.PI)}`, 65, 152);
   const e = sunElev();
-  cmp.fillText(env.weather === 'storm' ? '⛈ Storm' : env.weather === 'fog' ? '🌫 Fog' : e < -0.05 ? '🌙 Night' : e < 0.3 ? (env.dayT < 0.5 ? '🌅 Dawn' : '🌇 Dusk') : '☀ Day', 65, 152);
+  cmp.fillText(env.weather === 'storm' ? '⛈ Storm' : env.weather === 'fog' ? '🌫 Fog' : e < -0.05 ? '🌙 Night' : e < 0.3 ? (env.dayT < 0.5 ? '🌅 Dawn' : '🌇 Dusk') : '☀ Day', 65, 170);
   cmp.shadowBlur = 0;
+}
+// compass bearing in degrees (N 0, E 90) for a heading angle (+z north, +x west)
+function bearingDeg(a) { return (((-a * 180 / Math.PI) % 360) + 360) % 360; }
+// things worth steering toward, for the heading tape and the on-screen waypoint
+function navTargets() {
+  const out = [], om = objective.marker, tr = myTreasure();
+  const OBJ = { treasureShip: ['💰', '#ffd700'], harbor: ['⚓', '#40ff80'], fort: ['🏰', '#ff6040'], kraken: ['🐙', '#c060ff'] };
+  if (om) out.push({ x: om[0], z: om[1], icon: (OBJ[om[2]] || ['★'])[0], col: (OBJ[om[2]] || [0, '#ffd700'])[1], main: true });
+  if (tr) out.push({ x: tr.x, z: tr.z, icon: '❌', col: '#ff4030', main: !om });
+  for (const s of ships) {
+    if (!isAlive(s) || s === me || s === menuShip) continue;
+    if (s.kind === 'b') out.push({ x: s.pos.x, z: s.pos.z, icon: '☠', col: '#ff3030', main: !om && !tr });
+    else if (teamOf(s) === 'E' && s.role !== 'merchant') out.push({ x: s.pos.x, z: s.pos.z, tick: '#ff4a3a' });
+    else if (teamOf(s) === 'P' && s.role !== 'convoy') out.push({ x: s.pos.x, z: s.pos.z, tick: '#6fe07a' });
+  }
+  return out;
+}
+const navT = $('navtape').getContext('2d'), NAV_W = 560, NAV_SPAN = 1.35, NAV_K = NAV_W / 2 / NAV_SPAN, _vd = new THREE.Vector3();
+function drawNavTape() {
+  const c = navT, cx = NAV_W / 2;
+  c.clearRect(0, 0, NAV_W, 50);
+  if (!me) return;
+  camera.getWorldDirection(_vd);
+  const vh = Math.atan2(_vd.x, _vd.z), px = (a) => cx - angDiff(a, vh) * NAV_K;
+  const g = c.createLinearGradient(0, 0, NAV_W, 0);
+  g.addColorStop(0, 'rgba(20,12,4,0)'); g.addColorStop(0.12, 'rgba(20,12,4,.6)'); g.addColorStop(0.88, 'rgba(20,12,4,.6)'); g.addColorStop(1, 'rgba(20,12,4,0)');
+  c.fillStyle = g; c.fillRect(0, 4, NAV_W, 26);
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  // ticks every 15 degrees, cardinal letters every 45
+  for (let d = 0; d < 360; d += 15) {
+    const a = -d * Math.PI / 180, rel = angDiff(a, vh);
+    if (Math.abs(rel) > NAV_SPAN) continue;
+    const x = px(a), fade = 1 - Math.abs(rel) / NAV_SPAN;
+    c.globalAlpha = Math.min(1, fade * 2.5);
+    if (d % 45 === 0) { c.font = 'bold 15px Georgia'; c.fillStyle = d === 0 ? '#ff7060' : '#f6e7c1'; c.fillText(COMPASS[d / 45], x, 17); }
+    else { c.fillStyle = 'rgba(246,231,193,.6)'; c.fillRect(x - 0.5, 12, 1, 10); }
+  }
+  // wind: where it blows from
+  const wx = px(wind.angle + Math.PI);
+  if (Math.abs(angDiff(wind.angle + Math.PI, vh)) < NAV_SPAN) { c.globalAlpha = 0.9; c.font = '13px Georgia'; c.fillStyle = '#9fe3ff'; c.fillText('🌬', wx, 38); }
+  // ship heading caret
+  const shx = px(me.heading);
+  if (Math.abs(angDiff(me.heading, vh)) < NAV_SPAN) { c.globalAlpha = 1; c.fillStyle = '#fff'; c.beginPath(); c.moveTo(shx, 30); c.lineTo(shx - 5, 37); c.lineTo(shx + 5, 37); c.closePath(); c.fill(); }
+  // targets: ticks for ships, icons with distance for objectives (pinned to the edge when outside the tape)
+  for (const t of navTargets()) {
+    const b = Math.atan2(t.x - me.pos.x, t.z - me.pos.z), rel = angDiff(b, vh), d = Math.hypot(t.x - me.pos.x, t.z - me.pos.z);
+    if (t.tick) {
+      if (Math.abs(rel) > NAV_SPAN || d > 320) continue;
+      c.globalAlpha = 0.9; c.fillStyle = t.tick;
+      const x = px(b); c.beginPath(); c.moveTo(x, 6); c.lineTo(x - 4, 0); c.lineTo(x + 4, 0); c.closePath(); c.fill();
+      continue;
+    }
+    const off = Math.abs(rel) > NAV_SPAN * 0.92, x = off ? (rel > 0 ? 44 : NAV_W - 44) : px(b);
+    c.globalAlpha = 1; c.font = '18px Georgia'; c.fillText(t.icon, x, 17);
+    c.font = 'bold 11px Georgia'; c.fillStyle = t.col; c.fillText(off ? (rel > 0 ? '◀ ' : '') + Math.round(d) + ' m' + (off && rel < 0 ? ' ▶' : '') : Math.round(d) + ' m', x, 40);
+  }
+  c.globalAlpha = 1;
+  // centre line
+  c.fillStyle = '#ffd977'; c.fillRect(cx - 1, 2, 2, 6);
+}
+// floating marker over the main objective in the 3D view
+function updateWaypoint() {
+  const el = $('waypoint'), t = me && navTargets().find(q => q.main);
+  if (!t || state !== 'playing') { el.style.display = 'none'; return; }
+  const d = Math.hypot(t.x - me.pos.x, t.z - me.pos.z);
+  TV.set(t.x, d < 60 ? 14 : 8, t.z).project(camera);
+  if (TV.z > 1 || Math.abs(TV.x) > 1 || Math.abs(TV.y) > 1 || d < 25) { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  el.style.left = ((TV.x * 0.5 + 0.5) * innerWidth) + 'px';
+  el.style.top = ((-TV.y * 0.5 + 0.5) * innerHeight) + 'px';
+  const html = `${t.icon}|${Math.round(d / 5) * 5}`;
+  if (el._h !== html) { el._h = html; el.firstChild.textContent = t.icon; el.lastChild.textContent = `${Math.round(d / 5) * 5} m`; el.lastChild.style.color = t.col; }
 }
 function toggleBigMap(v = !bigMapOpen) { bigMapOpen = v; $('bigmapWrap').style.display = v ? 'flex' : 'none'; }
 function updateHUD() {
@@ -4425,6 +4541,8 @@ function updateHUD() {
   drawChart(mm, 220, fp.x, fp.z, 110 / 280, me ? me.heading : 0, true);
   if (bigMapOpen) { drawChart(bm, 620, 0, 0, 310 / 720, 0, false); drawWindRose(bm, 60, 60, 0); }
   drawCompass();
+  drawNavTape();
+  updateWaypoint();
 
   updateNums();
   updateTutorialHUD();
