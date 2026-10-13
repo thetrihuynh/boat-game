@@ -170,6 +170,34 @@
   .card .cd { font-size: 13px; opacity: .85; margin: 4px 0; }
   .card .pips { color: #ffd977; letter-spacing: 3px; }
   .card button { font-size: 15px; padding: 6px 10px; }
+  /* ---- home port ---- */
+  #port { position: fixed; top: 0; right: 0; bottom: 0; width: min(430px, 100vw); overflow: auto; padding: 16px 18px; display: none;
+    background: linear-gradient(90deg, rgba(40,24,10,.75), rgba(40,24,10,.94) 18%); border-left: 3px solid #c9a45c; }
+  #port .phead { display: flex; justify-content: space-between; align-items: center; }
+  #port .ptitle { font-size: 30px; font-weight: bold; color: #ffd977; text-shadow: 0 3px 0 #2a1606; }
+  #port .psub { font-size: 13px; opacity: .75; font-style: italic; }
+  #port .purse { font-size: 18px; padding: 5px 12px; border-radius: 18px; border: 2px solid #c9a45c; background: rgba(0,0,0,.35); }
+  #port .purse b { color: #ffd977; }
+  #port .psec { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 14px 0 6px; padding-bottom: 4px; border-bottom: 1px solid rgba(201,164,92,.45); color: #ffd977; letter-spacing: 2px; font-size: 15px; }
+  #port .psec span { flex: 1; font-size: 12px; letter-spacing: 0; color: #f6e7c1; opacity: .7; }
+  #port button { margin: 0; font-size: 14px; padding: 6px 10px; }
+  #port button.small { padding: 3px 8px; font-size: 12px; }
+  #port .prow { display: grid; grid-template-columns: 1fr 90px 64px; align-items: center; gap: 8px; padding: 6px 8px; margin-bottom: 4px; border-radius: 8px; border: 1px solid transparent; background: rgba(0,0,0,.25); cursor: pointer; }
+  #port .prow.on { border-color: #ffd977; background: rgba(255,217,119,.14); }
+  #port .prow .bar { height: 9px; border-width: 1px; }
+  #port .pn { font-size: 14px; } #port .pn span { display: block; font-size: 11px; opacity: .65; }
+  #port .ph { font-size: 12px; text-align: right; opacity: .8; }
+  #port .prow2 { display: flex; gap: 6px; margin: 8px 0; } #port .prow2 button { flex: 1; }
+  #port .uprow { display: grid; grid-template-columns: 1fr 64px 76px; align-items: center; gap: 6px; font-size: 13px; margin: 3px 0; }
+  #port .uprow i { opacity: .6; font-size: 11px; } #port .uprow .pips { color: #ffd977; letter-spacing: 1px; }
+  #port .dock { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  #port .dcard { display: flex; flex-direction: column; gap: 2px; padding: 8px; border-radius: 8px; background: linear-gradient(#f3e3c0, #dcc595); color: #2a1606; border: 2px solid #8a6a30; font-size: 12px; }
+  #port .dcard b { font-size: 15px; } #port .dcard i { opacity: .7; } #port .dcard button { margin-top: 4px; }
+  #port .bigsail { position: sticky; bottom: 0; display: block; width: 100%; margin-top: 16px; padding: 12px; font-size: 22px; font-weight: bold; box-shadow: 0 -6px 14px rgba(20,12,4,.9), 0 3px 0 #6b3d10; }
+  #port .pfoot { margin-top: 8px; font-size: 12px; opacity: .7; text-align: center; }
+  #fleetHud { margin-top: 6px; font-size: 13px; }
+  #fleetHud div { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
+  #fleetHud .bar { display: inline-block; width: 90px; height: 7px; border-width: 1px; }
   /* ---- shipwright storefront ---- */
   #shop .shopbox { position: relative; width: min(860px, 96vw); max-width: none !important; padding: 0 0 16px; overflow: hidden auto; text-align: left;
     background: repeating-linear-gradient(90deg, rgba(0,0,0,0) 0 46px, rgba(0,0,0,.18) 46px 48px), linear-gradient(#5a3a1a, #3a2410); border: 4px solid #2a1606; outline: 2px solid #c9a45c; outline-offset: -8px; }
@@ -213,7 +241,8 @@
     <div id="stats"><span id="gold">Gold: 0</span> &nbsp;·&nbsp; <span id="wave">Wave 1</span> &nbsp;·&nbsp; <span id="foes"></span></div>
     <div id="objective"></div>
     <div id="treasureTxt"></div>
-    <div id="hint">[B] Shipwright · [H] Repair kit</div>
+    <div id="hint">[B] Shipwright · [H] Repair kit · [V] Fleet orders</div>
+    <div id="fleetHud"></div>
   </div>
   <div id="bossbar"><div id="bossName"></div><div class="bar"><div id="bossFill"></div></div></div>
   <canvas id="compass" width="130" height="186"></canvas>
@@ -251,9 +280,10 @@
     <button data-t="up">▲ Range</button><button data-t="both">⇆ Both</button><button data-t="down">▼ Range</button>
     <button data-t="special">C</button><button data-t="kegs">F</button><button data-t="mortar">R</button>
     <button data-t="boost">💨</button><button data-t="g">G</button><button data-t="shop">🛠</button>
-    <button data-t="kit">🧰</button><button data-t="map">🗺</button><button data-t="pause">⏸</button>
+    <button data-t="kit">🧰</button><button data-t="orders">V</button><button data-t="map">🗺</button><button data-t="pause">⏸</button>
   </div>
 </div>
+<div id="port"></div>
 <div id="shop"><div class="shopbox" id="shopBox"></div></div>
 <div id="overlay"><div id="panel"></div></div>
 
@@ -1058,7 +1088,8 @@ class Ship {
         }
         if (this.burnT <= 0) this.burnStacks = 0;
       }
-      if (this.regen && this.hp < this.maxHp && time - this.lastHitT > this.regenDelay) {
+      if (inPort) { this.speed = 0; this.sail = 0; }
+      if (this.regen && this.hp < this.maxHp && time - this.lastHitT > this.regenDelay && !inPort) {
         this.hp = Math.min(this.maxHp, this.hp + this.regen * dt * (this.burnT > 0 ? 0.3 : 1)); this.repairing = true;
       } else this.repairing = false;
       if (this.kitT > 0) { this.kitT -= dt; this.hp = Math.min(this.maxHp, this.hp + this.kitRate * dt); this.repairing = true; }
@@ -2292,7 +2323,7 @@ function updateAI(e, dt) {
   }
   const sc = e.scale, ally = e.kind === 'a', role = e.role || 'line';
   let tgt;
-  if (ally) tgt = nearestOfTeam('E', e.pos.x, e.pos.z, 220);
+  if (ally) tgt = e.fleetEntry ? fleetTarget(e, e.ownerProf && isAlive(e.ownerProf.ship) ? e.ownerProf.ship : null) : nearestOfTeam('E', e.pos.x, e.pos.z, 220);
   else {
     tgt = isAlive(fleet.target) && !(fleet.target.smokeT > 0) ? fleet.target : nearestPlayerShip(e.pos.x, e.pos.z);
     const near = role !== 'fireship' && nearestPlayerShip(e.pos.x, e.pos.z, 40 * sc);   // fight back at close range
@@ -2315,7 +2346,8 @@ function updateAI(e, dt) {
   if (!tgt && lead) {
     // escort with nothing to fight: keep station beside its captain
     const f = lead.forward(), side = e.station || 1;
-    const px = lead.pos.x - f.x * 18 + f.z * 22 * side, pz = lead.pos.z - f.z * 18 - f.x * 22 * side;
+    let px = lead.pos.x - f.x * 18 + f.z * 22 * side, pz = lead.pos.z - f.z * 18 - f.x * 22 * side;
+    if (e.fleetEntry) [px, pz] = fleetSlotPos(lead, e.slot | 0, e.ownerProf.order === 'hold' ? 45 : 0);
     const dd = Math.hypot(px - e.pos.x, pz - e.pos.z);
     desired = dd > 8 ? Math.atan2(px - e.pos.x, pz - e.pos.z) : lead.heading;
     e.sail = dd > 40 ? 1 : dd > 12 ? 2 / 3 : clamp(lead.sail, 1 / 3, 1);
@@ -2586,7 +2618,7 @@ function runTimers(dt) {
 
 function makeProfile(id, name, colorIdx, design = DEFAULT_DESIGN, meta = {}) {
   return { id, name, colorIdx, meta, trait: meta.trait || '', design: cleanDesign(design), gold: 0, earned: 0, kills: 0, up: freshUp(), ammo: 'round', cd: { kegs: 0, mortar: 0, boost: 0, special: 0, kit: 0 },
-           ship: null, respawnT: 0, gen: 0, input: { steer: 0, sail: 2 / 3 } };
+           ship: null, respawnT: 0, gen: 0, input: { steer: 0, sail: 2 / 3 }, fleet: [], order: 'follow', focus: null };
 }
 function goldMul(prof) { return (prof.trait === 'quartermaster' ? 1.15 : 1) * (SHIP_CLASSES[prof.design ? prof.design.cls : 'frigate'].goldMul || 1); }
 function giveGold(prof, amt) { amt = Math.round(amt * goldMul(prof)); prof.gold += amt; prof.earned += amt; sfxFor('coin', prof); }
@@ -2611,6 +2643,8 @@ function clearEntities() {
   wave = 0; waveClearT = -1; overPending = false; gameActive = false; shake = 0;
   camYaw = Math.PI; camPitch = 0.32; aimElev = 0.22;
   closeShop(true);
+  inPort = false; $('port').style.display = 'none';
+  for (const p of profiles.values()) p.fleet = [];
 }
 
 function makePlayerShip(design, extra = {}) {
@@ -2675,7 +2709,7 @@ function startMatch() {
   for (const p of profiles.values()) {
     if (p.id === myId) { p.meta = myMeta(); p.design = cleanDesign(myDesign); }
     const m = p.meta || {};
-    Object.assign(p, { treasure: null, gold: 0, earned: 0, kills: 0, up: freshUp(), ammo: 'round', cd: { kegs: 0, mortar: 0, boost: 0, special: 0, kit: 0 }, respawnT: 0, input: { steer: 0, sail: 2 / 3 } });
+    Object.assign(p, { treasure: null, gold: 0, earned: 0, kills: 0, up: freshUp(), ammo: 'round', cd: { kegs: 0, mortar: 0, boost: 0, special: 0, kit: 0 }, respawnT: 0, input: { steer: 0, sail: 2 / 3 }, fleet: [], order: 'follow', focus: null, seaPos: null });
     // renown bonuses, and a war chest when starting at a later wave
     p.trait = TRAITS[m.trait] ? m.trait : '';
     p.gold = clamp(m.seed | 0, 0, 3) * 200 + 85 * (startWaveSel - 1) ** 2;   // about what a run has earned by then
@@ -2969,7 +3003,11 @@ function victory() {
 function onShipSunk(s) {
   const killer = s.lastHitBy && s.lastHitBy.profile;
   if (s.role === 'convoy') { announce('⚓ A merchantman has been sunk!', 2); return; }
-  if (s.kind === 'a') { notify('Your escort has been sunk!', s.ownerProf); spawnCrates(s.pos, 1); return; }
+  if (s.kind === 'a') {
+    if (s.fleetEntry) { announce(`⛵ The ${s.name} has been sunk!`, 2.5, s.ownerProf); after(0.1, () => relinkFleet(s.ownerProf)); }
+    else notify('Your escort has been sunk!', s.ownerProf);
+    spawnCrates(s.pos, 1); return;
+  }
   if (s.selfDestruct) return;   // fireships that blew themselves up pay nothing
   if (s.role === 'flag') { fleet.brokenT = 12; announce('Flagship sunk — the enemy crews lose heart!', 3); }
   if (s.kind === 'p') {
@@ -3072,7 +3110,8 @@ function resolveBoarding(prof, choice) {
   if (!b || b.phase !== 'choose') return;
   const s = prof.ship, e = b.target, loot = boardLoot(e);
   endBoarding(prof);
-  if (choice === 'capture' && escortCount(prof) >= MAX_ESCORTS + 1) { notify('Your fleet is full — plundering instead', prof); choice = 'plunder'; }
+  const capFull = net.mode === 'solo' ? prof.fleet.length >= fleetCap() : escortCount(prof) >= MAX_ESCORTS + 1;
+  if (choice === 'capture' && capFull) { notify('Your fleet is full — plundering instead', prof); choice = 'plunder'; }
   if (choice === 'plunder') {
     giveGold(prof, Math.round(loot * 2.5));
     s.hp = Math.min(s.maxHp, s.hp + s.maxHp * 0.2);
@@ -3086,6 +3125,7 @@ function resolveBoarding(prof, choice) {
     e.burnT = 0; e.slowT = 0;
     e.flag.material = new THREE.MeshStandardMaterial({ map: JOLLY_ROGER, side: THREE.DoubleSide, roughness: 0.9 });
     removeTag(e);
+    if (net.mode === 'solo') addFleetEntry(prof, e, e.scale < 0.9 ? 'sloop' : e.scale < 1.2 ? 'frigate' : 'manowar', e.name.replace('Captured ', 'Prize '));
     giveGold(prof, Math.round(loot * 0.5));
     notify(`🏴‍☠️ Captured! The ${e.name.replace('Captured ', '')} now sails under your flag`, prof);
   } else {
@@ -3122,13 +3162,15 @@ function hostLogic(dt) {
       waveClearT = 7;
       announce(`Wave ${wave} cleared!`, 2.5);
       for (const p of profiles.values()) {
-        if (isAlive(p.ship)) p.ship.hp += (p.ship.maxHp - p.ship.hp) * 0.5;   // crew patches half the damage between waves
+        // crew patches half the damage between waves, fleet included
+        for (const sh of ships) if ((sh === p.ship || (sh.kind === 'a' && sh.ownerProf === p)) && isAlive(sh)) sh.hp += (sh.maxHp - sh.hp) * 0.5;
         giveGold(p, 50 * wave);
       }
-      after(2.6, () => notify(`+${50 * wave} gold bounty · hull half patched — press B for repairs & kits`));
+      if (net.mode === 'solo') { waveClearT = 10; after(2.6, () => notify(`+${50 * wave} gold bounty · sailing home to port in a moment — [Enter] go now`)); }
+      else after(2.6, () => notify(`+${50 * wave} gold bounty · hull half patched — press B for repairs & kits`));
     }
     waveClearT -= dt;
-    if (waveClearT <= 0) { waveClearT = -1; startWave(wave + 1); }
+    if (waveClearT <= 0) { waveClearT = -1; if (net.mode === 'solo') enterPort(); else startWave(wave + 1); }
   }
 }
 
@@ -3231,6 +3273,300 @@ function useKit(prof) {
   notify(`🧰 Carpenters patching the hull! (${prof.up.kit} kit${prof.up.kit === 1 ? '' : 's'} left)`, prof);
   sfxFor('pickup', prof);
 }
+
+// ============================================================
+//  Your fleet (solo): ships bought at the Dockyard sail with the flagship,
+//  take simple orders (V) and return to the home port after every wave
+// ============================================================
+const FLEET_PRICE = { sloop: 900, frigate: 1500, galleon: 2400, manowar: 3000 };
+const FLEET_UPS = {
+  armor:  { icon: '🛡', name: 'Hull', desc: '+30 max hull', cost: [90, 150, 240, 360, 510] },
+  guns:   { icon: '💥', name: 'Guns', desc: '+2.5 damage', cost: [120, 190, 290, 420, 570] },
+  reload: { icon: '⏱', name: 'Crews', desc: '-12% reload', cost: [90, 160, 240, 350, 480] },
+  sails:  { icon: '⛵', name: 'Sails', desc: '+10% speed', cost: [70, 130, 210, 310, 450] },
+};
+const FLEET_NAMES = ['Sea Wolf', 'Merry Meg', 'Black Gull', 'Revenge', 'Storm Petrel', 'Lucky Jack', 'Grey Widow', 'Silver Eel', 'Fortune', 'Red Heron', 'Salty Kate', 'Neptune'];
+const ORDERS = { follow: { icon: '⚓', name: 'Follow', desc: 'keep formation, defend the flagship' }, attack: { icon: '⚔', name: 'Attack', desc: 'all ships attack your target' }, hold: { icon: '✋', name: 'Hold back', desc: 'stay out of the fight' } };
+const ORDER_KEYS = Object.keys(ORDERS);
+// berths grow with the campaign: 1 ship early, up to 4 alongside the flagship
+function fleetCap() { return Math.min(4, 1 + Math.floor(Math.max(1, wave) / 5)); }
+// later ships come with seasoned crews: stronger, and dearer
+function fleetPrice(cls) { return Math.round(FLEET_PRICE[cls] * (1 + 0.05 * Math.max(1, wave)) / 10) * 10; }
+function fleetShips(prof) { return ships.filter(x => x.kind === 'a' && x.ownerProf === prof && x.fleetEntry && isAlive(x)); }
+function fleetSlotPos(lead, slot, back = 0) {
+  const f = lead.forward(), side = slot % 2 ? -1 : 1, row = Math.floor(slot / 2);
+  const b = 22 + 20 * row + back, l = 24 * side;
+  return [lead.pos.x - f.x * b + f.z * l, lead.pos.z - f.z * b - f.x * l];
+}
+function makeFleetShip(prof, entry, x, z, h) {
+  const c = SHIP_CLASSES[entry.cls], k = entry.seasoned || 1;
+  const e = new Ship({ kind: 'a', colors: designColors(prof.design), scale: c.scale, masts: c.masts, cannons: c.guns, x, z, heading: h,
+    maxHp: Math.round(c.hp * k), maxSpeed: c.speed, turnRate: c.turn, reloadTime: c.reload, aimErr: 0.02 + c.spread, dmg: c.dmg * (1 + (k - 1) * 0.6) });
+  e.ownerProf = prof; e.profile = prof; e.fleetEntry = entry; e.design = { ...prof.design, cls: entry.cls };
+  e.name = entry.name; e.regen = e.maxHp / c.repairTime; e.prefRange = rand(45, 60);
+  e.dodge = c.dodge || 0; e.armor = c.armor || 0; if (c.windEff != null) e.windEff = c.windEff;
+  for (const [k2, L] of Object.entries(entry.up)) for (let i = 0; i < L; i++) fleetUpEffect(e, k2);
+  e.hp = e.maxHp;
+  ships.push(e);
+  return e;
+}
+// upgrades apply as increments, so they work the same on bought and captured ships
+function fleetUpEffect(e, k) {
+  if (k === 'armor') { e.maxHp += 30; e.hp += 30; }
+  else if (k === 'guns') e.dmg += 2.5;
+  else if (k === 'reload') e.reloadTime *= 0.88;
+  else if (k === 'sails') { e.maxSpeed *= 1.1; e.turnRate *= 1.1; }
+}
+function relinkFleet(prof) { prof.fleet = prof.fleet.filter(en => isAlive(en.ship)); prof.fleet.forEach((en, i) => { en.ship.slot = i; }); }
+function addFleetEntry(prof, e, cls, name) {
+  const entry = { id: 'f' + (++shipSeq), cls, name, up: { armor: 0, guns: 0, reload: 0, sails: 0 }, ship: e };
+  e.fleetEntry = entry; e.name = name;
+  prof.fleet.push(entry); relinkFleet(prof);
+  return entry;
+}
+function nextFleetName(prof) {
+  const used = new Set(prof.fleet.map(f => f.name));
+  return FLEET_NAMES.find(n => !used.has(n)) || 'Ship ' + (prof.fleet.length + 1);
+}
+function buyFleetShip(prof, cls) {
+  if (!SHIP_CLASSES[cls] || !classUnlocked(cls) || prof.fleet.length >= fleetCap()) return;
+  const cost = fleetPrice(cls);
+  if (prof.gold < cost) return;
+  prof.gold -= cost;
+  const entry = { id: 'f' + (++shipSeq), cls, name: nextFleetName(prof), up: { armor: 0, guns: 0, reload: 0, sails: 0 }, seasoned: 1 + 0.05 * Math.max(1, wave), paid: cost };
+  const [x, z, h] = berthPos(prof.fleet.length + 1);
+  entry.ship = makeFleetShip(prof, entry, x, z, h);
+  prof.fleet.push(entry); relinkFleet(prof);
+  sfx('bell');
+  toast(`⛵ The ${entry.name} joins your fleet!`);
+}
+function fleetUpCost(entry, k) { const L = entry.up[k] | 0; return L >= 5 ? 0 : FLEET_UPS[k].cost[L]; }
+function buyFleetUp(prof, entry, k) {
+  const cost = fleetUpCost(entry, k);
+  if (!cost || prof.gold < cost || !isAlive(entry.ship)) return;
+  prof.gold -= cost; entry.up[k] = (entry.up[k] | 0) + 1;
+  fleetUpEffect(entry.ship, k);
+  sfx('coin');
+}
+function sellFleetShip(prof, entry) {
+  const refund = Math.round((entry.paid || 600) * 0.4);
+  prof.gold += refund;
+  if (entry.ship) entry.ship.remove();
+  entry.ship = null; relinkFleet(prof);
+  toast(`Sold the ${entry.name} for ${refund} gold`);
+}
+function setFleetOrder(prof, o, focus = null) {
+  prof.order = o; prof.focus = focus;
+  notify(`${ORDERS[o].icon} Fleet orders: ${ORDERS[o].name} — ${ORDERS[o].desc}`, prof);
+}
+function cycleFleetOrder() {
+  const prof = myProf();
+  if (!prof || net.mode !== 'solo' || !prof.fleet || !prof.fleet.length) { toast('No fleet yet — buy ships at the Dockyard in port'); return; }
+  const o = ORDER_KEYS[(ORDER_KEYS.indexOf(prof.order || 'follow') + 1) % ORDER_KEYS.length];
+  let focus = null;
+  if (o === 'attack' && me) {   // target: the enemy nearest your aim point, else nearest to you
+    const ax = aimPoint ? aimPoint.x : me.pos.x, az = aimPoint ? aimPoint.z : me.pos.z;
+    focus = nearestOfTeam('E', ax, az, 400);
+  }
+  setFleetOrder(prof, o, focus);
+}
+// which enemy a fleet ship should fight, according to its orders
+function fleetTarget(e, lead) {
+  const prof = e.ownerProf, o = prof.order || 'follow';
+  if (!lead) return nearestOfTeam('E', e.pos.x, e.pos.z, 220);
+  if (o === 'attack') {
+    if (!isAlive(prof.focus)) prof.focus = nearestOfTeam('E', lead.pos.x, lead.pos.z, 400);
+    return prof.focus;
+  }
+  if (o === 'hold') return nearestOfTeam('E', e.pos.x, e.pos.z, 45);
+  return nearestOfTeam('E', lead.pos.x, lead.pos.z, 110) || nearestOfTeam('E', e.pos.x, e.pos.z, 60);
+}
+
+// ============================================================
+//  Home port: a harbour town far to the south where the fleet docks between waves
+// ============================================================
+const HARBOR = { x: 0, z: -2600 };
+let inPort = false, portSel = 0, portCam = null;
+function berthPos(i) { return [HARBOR.x + (i - 2) * 36 + 10, HARBOR.z - 14, 0]; }
+function buildHarbour() {
+  const g = new THREE.Group(), M = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.9, flatShading: true, ...o });
+  const stone = M(0x8d877b), wood = M(0x6b4a2b), plank = M(0x8a6238), grass = M(0x3f8f3a), sand = M(0xe6cf8f);
+  const box = (w, h, d, m, x, y, z, ry = 0) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); b.position.set(x, y, z); b.rotation.y = ry; b.castShadow = b.receiveShadow = true; g.add(b); return b; };
+  const H = HARBOR, QZ = H.z - 40;
+  // quay, beach and the hill the town sits on
+  box(330, 4, 26, stone, H.x, 0.6, QZ - 13);
+  box(380, 3, 160, sand, H.x, -0.2, QZ - 100);
+  const hill = new THREE.Mesh(new THREE.SphereGeometry(120, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), grass);
+  hill.scale.set(1.6, 0.35, 0.8); hill.position.set(H.x, 0, QZ - 150); hill.receiveShadow = true; g.add(hill);
+  // piers with posts
+  for (let i = 0; i < 5; i++) {
+    const px = H.x + (i - 2) * 36;
+    box(5, 0.6, 40, plank, px, 2.1, QZ + 20);
+    for (let k = 0; k < 5; k++) for (const sx of [-2.2, 2.2]) {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 5, 6), wood); post.position.set(px + sx, 0, QZ + 2 + k * 9.5); g.add(post);
+    }
+  }
+  // breakwater with a lighthouse at its tip
+  box(10, 4, 120, stone, H.x + 150, 0.6, QZ + 50);
+  const LX = H.x + 150, LZ = QZ + 112;
+  const white = M(0xf2efe6), red = M(0xb8322a);
+  for (let k = 0; k < 6; k++) {
+    const seg = new THREE.Mesh(new THREE.CylinderGeometry(4.2 - k * 0.45, 4.6 - k * 0.45, 4, 12), k % 2 ? red : white);
+    seg.position.set(LX, 4.5 + k * 4, LZ); seg.castShadow = true; g.add(seg);
+  }
+  const lamp = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, 3, 10), M(0xffe9a0, { emissive: 0xffc040, emissiveIntensity: 1.4 }));
+  lamp.position.set(LX, 30, LZ); g.add(lamp);
+  const cap = new THREE.Mesh(new THREE.ConeGeometry(2.8, 3, 10), red); cap.position.set(LX, 33, LZ); g.add(cap);
+  // warehouses along the quay and houses up the hill
+  const walls = [M(0xd9c7a0), M(0xc9a27a), M(0xe8dcc0), M(0xb88a60)], roofs = [M(0x9a3b2b), M(0x6b4a2b), M(0x7a2a20)];
+  const house = (w, h, d, x, z, i) => {
+    box(w, h, d, walls[i % walls.length], x, h / 2 + 2.5, z);
+    const r = new THREE.Mesh(new THREE.ConeGeometry(Math.hypot(w, d) / 2 * 1.05, h * 0.7, 4), roofs[i % roofs.length]);
+    r.rotation.y = Math.PI / 4; r.scale.set(1, 1, d / w); r.position.set(x, h + 2.5 + h * 0.35, z); r.castShadow = true; g.add(r);
+  };
+  for (let i = 0; i < 6; i++) house(20, 9, 12, H.x - 125 + i * 50, QZ - 34, i);
+  const rng = mulberry32(77);
+  for (let i = 0; i < 22; i++) {
+    const x = H.x + (rng() - 0.5) * 300, z = QZ - 60 - rng() * 70, w = 8 + rng() * 6;
+    house(w, 6 + rng() * 4, w * (0.7 + rng() * 0.4), x, z, i + 1);
+  }
+  // cargo on the quay, and the shipwright's crane
+  for (let i = 0; i < 14; i++) {
+    const c = box(2.2, 2.2, 2.2, i % 3 ? wood : plank, H.x + (rng() - 0.5) * 300, 3.7, QZ - 8 - rng() * 14, rng());
+    if (i % 4 === 0) c.scale.y = 1.6;
+  }
+  const crane = new THREE.Group();
+  const mast = new THREE.Mesh(new THREE.BoxGeometry(1.4, 22, 1.4), wood); mast.position.y = 13; crane.add(mast);
+  const jib = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 18), wood); jib.position.set(0, 23, 7); crane.add(jib);
+  crane.position.set(H.x - 160, 0, QZ - 4); g.add(crane);
+  // flags along the quay
+  for (let i = 0; i < 4; i++) {
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 14, 6), wood); pole.position.set(H.x - 90 + i * 60, 9.5, QZ - 2); g.add(pole);
+    const fl = new THREE.Mesh(new THREE.PlaneGeometry(5, 3), new THREE.MeshStandardMaterial({ map: JOLLY_ROGER, side: THREE.DoubleSide }));
+    fl.position.set(H.x - 87.5 + i * 60, 15, QZ - 2); g.add(fl);
+  }
+  scene.add(g);
+}
+buildHarbour();
+
+// every ship you own, flagship first
+function portShips(prof) { return [prof.ship, ...prof.fleet.map(f => f.ship)].filter(isAlive); }
+function enterPort() {
+  const prof = profiles.get(myId);
+  if (!prof || !isAlive(prof.ship)) return;
+  closeShop(true); toggleBigMap(false);
+  inPort = true; state = 'port'; portSel = 0;
+  if (document.pointerLockElement) document.exitPointerLock();
+  prof.seaPos = { x: prof.ship.pos.x, z: prof.ship.pos.z, h: prof.ship.heading };
+  relinkFleet(prof);
+  // tidy the sea: loose shot, kegs and burning wrecks don't follow us home
+  for (const b of balls) scene.remove(b.m); balls.length = 0;
+  for (const k of kegs) scene.remove(k.m); kegs.length = 0;
+  portShips(prof).forEach((s, i) => {
+    const [x, z, h] = berthPos(i);
+    s.pos.set(x, 0, z); s.heading = h; s.speed = 0; s.sail = 0; s.steer = 0;
+    s.burnT = 0; s.burnStacks = 0; s.slowT = 0; s.kitT = 0; s.boostT = 0;
+  });
+  mySail = 0;
+  setWeather('clear', true);
+  hud.style.display = 'none';
+  $('port').style.display = 'block';
+  portCam = null;
+  renderPort();
+  sfx('bell');
+}
+function leavePort() {
+  const prof = profiles.get(myId);
+  if (!inPort || !prof) return;
+  inPort = false; state = 'playing';
+  $('port').style.display = 'none';
+  hud.style.display = 'block';
+  const sp = prof.seaPos || { x: 0, z: 0, h: 0 };
+  const lead = prof.ship;
+  lead.pos.set(sp.x, 0, sp.z); lead.heading = sp.h;
+  prof.fleet.forEach((f, i) => { const [x, z] = fleetSlotPos(lead, i); f.ship.pos.set(x, 0, z); f.ship.heading = sp.h; f.ship.speed = 0; });
+  mySail = 2 / 3; prof.focus = null;
+  lockPointer(); clock.getDelta();
+  announce(`Wave ${wave + 1} — weigh anchor!`, 2);
+  after(2, () => startWave(wave + 1));
+}
+// harbour camera: a slow drift toward whichever ship is being worked on
+function updatePortCamera(dt) {
+  const prof = profiles.get(myId), list = prof ? portShips(prof) : [];
+  const s = list[Math.min(portSel, list.length - 1)];
+  const tx = s ? s.pos.x : HARBOR.x, tz = s ? s.pos.z : HARBOR.z;
+  const want = new THREE.Vector3(tx + 34 + Math.sin(time * 0.15) * 6, 15, tz + 44);   // framed left of the side panel
+  if (!portCam) portCam = { pos: want.clone(), look: new THREE.Vector3(tx + 16, 3, tz - 12) };
+  const k = Math.min(1, dt * 1.6);
+  portCam.pos.lerp(want, k); portCam.look.lerp(new THREE.Vector3(tx + 16, 3, tz - 12), k);
+  camera.position.copy(portCam.pos); camera.lookAt(portCam.look);
+  sky.position.copy(camera.position);
+  sun.position.copy(portCam.look).add(SUN_OFFSET); sun.target.position.copy(portCam.look);
+}
+function portRepairCost(s) { return s && s.hp < s.maxHp ? repairCost(s) : 0; }
+function renderPort() {
+  const prof = profiles.get(myId);
+  if (!prof) return;
+  const list = portShips(prof);
+  portSel = Math.min(portSel, list.length - 1);
+  const sel = list[portSel], isFlag = sel === prof.ship, entry = sel && sel.fleetEntry;
+  const sig = JSON.stringify([prof.gold, portSel, list.map(s => [Math.ceil(s.hp), s.maxHp, s.fleetEntry && s.fleetEntry.up]), wave]);
+  if (sig === renderPort.sig) return;
+  renderPort.sig = sig;
+  const allCost = list.reduce((a, s) => a + portRepairCost(s), 0);
+  const bar = (s) => { const f = s.hp / s.maxHp; return `<div class="bar"><div style="width:${f * 100}%;background:${f > 0.5 ? 'linear-gradient(#7fe07a,#2f9a3a)' : f > 0.25 ? 'linear-gradient(#ffd56a,#d18b12)' : 'linear-gradient(#ff7a6a,#b0201a)'}"></div></div>`; };
+  const rows = list.map((s, i) => {
+    const cls = SHIP_CLASSES[s === prof.ship ? prof.design.cls : (s.fleetEntry ? s.fleetEntry.cls : 'frigate')];
+    return `<div class="prow ${i === portSel ? 'on' : ''}" data-psel="${i}"><div class="pn">${s === prof.ship ? '★ ' + esc(prof.name) + "'s flagship" : esc(s.name)}<span>${cls.name}</span></div>${bar(s)}<div class="ph">${Math.ceil(s.hp)} / ${s.maxHp}</div></div>`;
+  }).join('');
+  let detail = '';
+  if (sel) {
+    const rc = portRepairCost(sel);
+    detail += `<div class="prow2"><button data-prep="${portSel}" ${rc && prof.gold >= rc ? '' : 'disabled'}>🔨 ${rc ? 'Repair · 🪙 ' + rc : 'Hull sound'}</button>`;
+    if (isFlag) detail += `<button data-pshop="1">🛠 Shipwright</button></div>`;
+    else detail += `<button class="ghost" data-psell="${portSel}">Sell · 🪙 ${Math.round(((entry && entry.paid) || 600) * 0.4)}</button></div>`;
+    if (entry) {
+      detail += `<div class="ups">` + Object.entries(FLEET_UPS).map(([k, u]) => {
+        const L = entry.up[k] | 0, c = fleetUpCost(entry, k);
+        return `<div class="uprow"><span>${u.icon} ${u.name} <i>${u.desc}</i></span><span class="pips">${'●'.repeat(L)}${'○'.repeat(5 - L)}</span>
+          <button data-pup="${k}" ${c && prof.gold >= c ? '' : 'disabled'}>${c ? '🪙 ' + c : 'MAX'}</button></div>`;
+      }).join('') + `</div>`;
+    }
+  }
+  const cap = fleetCap(), full = prof.fleet.length >= cap;
+  const dock = Object.entries(SHIP_CLASSES).map(([k, c]) => {
+    const price = fleetPrice(k), locked = !classUnlocked(k);
+    return `<div class="dcard"><b>${locked ? '🔒 ' : ''}${c.name}</b><i>${c.tag}</i><span>🛡 ${c.hp} · ${c.guns} guns · ⛵ ${c.speed}</span>
+      <button data-pbuy="${k}" ${locked || full || prof.gold < price ? 'disabled' : ''}>${locked ? 'Locked' : '🪙 ' + price}</button></div>`;
+  }).join('');
+  $('port').innerHTML = `<div class="phead"><div><div class="ptitle">⚓ Home Port</div><div class="psub">Wave ${wave} cleared — refit before the next voyage</div></div><div class="purse">💰 <b>${prof.gold}</b></div></div>
+    <div class="psec">Your fleet <span>${prof.fleet.length} / ${cap} ships besides the flagship${cap < 4 ? ` · next berth at wave ${(Math.floor(Math.max(1, wave) / 5) + 1) * 5}` : ''}</span>
+      ${allCost ? `<button class="small" data-prepall="1" ${prof.gold >= allCost ? '' : 'disabled'}>Repair all · 🪙 ${allCost}</button>` : ''}</div>
+    <div class="plist2">${rows}</div>
+    ${detail}
+    <div class="psec">Dockyard <span>${full ? 'All berths taken' : 'Buy a ship to sail with you'}</span></div>
+    <div class="dock">${dock}</div>
+    <button class="bigsail" data-psail="1">⚔ Set Sail — Wave ${wave + 1}</button>
+    <div class="pfoot">At sea: <b>V</b> cycles fleet orders (Follow · Attack your target · Hold back)</div>`;
+}
+$('port').addEventListener('click', (e) => {
+  const prof = profiles.get(myId);
+  if (!prof || !inPort) return;
+  const t = e.target.closest('[data-psel],[data-prep],[data-prepall],[data-pshop],[data-psell],[data-pup],[data-pbuy],[data-psail]');
+  if (!t || t.disabled) return;
+  initAudio();
+  const list = portShips(prof), d = t.dataset;
+  const repair = (s) => { const c = portRepairCost(s); if (c && prof.gold >= c) { prof.gold -= c; s.hp = s.maxHp; sfx('coin'); } };
+  if (d.psel) portSel = +d.psel;
+  else if (d.prep) repair(list[+d.prep]);
+  else if (d.prepall) list.forEach(repair);
+  else if (d.pshop) { openShop(); return; }
+  else if (d.psell) { const s = list[+d.psell]; if (s && s.fleetEntry) { sellFleetShip(prof, s.fleetEntry); portSel = 0; } }
+  else if (d.pup) { const s = list[portSel]; if (s && s.fleetEntry) buyFleetUp(prof, s.fleetEntry, d.pup); }
+  else if (d.pbuy) { buyFleetShip(prof, d.pbuy); portSel = portShips(prof).length - 1; }
+  else if (d.psail) { leavePort(); return; }
+  renderPort.sig = null; renderPort();
+});
 
 function applyBuy(prof, key) {
   const u = UPGRADES[key];
@@ -3599,6 +3935,7 @@ const CONTROLS = `
     <tr><td>G</td><td>Board a crippled enemy alongside (below 35% hull), then 1 / 2 / 3 to plunder, capture or scuttle — or dig at a treasure X</td></tr>
     <tr><td>C</td><td>Your ship class's signature move (smoke / rapid reload / all guns)</td></tr>
     <tr><td>F / R / Shift</td><td>Abilities: powder kegs / mortar strike / speed burst</td></tr>
+    <tr><td>V</td><td>Fleet orders: Follow · Attack your target · Hold back</td></tr>
     <tr><td>H</td><td>Use a repair kit — heals 40% over 6s and puts out fires</td></tr>
     <tr><td>B</td><td>Shipwright — upgrades, kits &amp; repairs (repairs only out of combat)</td></tr>
     <tr><td>N</td><td>Music on / off</td></tr>
@@ -3904,12 +4241,12 @@ function renderShop() {
   const escorts = net.mode === 'guest' ? ships.filter(x => x.kind === 'a' && x.name === prof.name + "'s escort" && isAlive(x)).length : escortCount(prof);
   const hpPct = me ? clamp(me.hp / me.maxHp, 0, 1) : 0;
   const tabs = SHOP_TABS.map(([cat, icon, name]) => {
-    const n = Object.entries(UPGRADES).filter(([k, u]) => (u.cat || 'ship') === cat && itemState(prof, k, u, why, escorts).can).length;
+    const n = Object.entries(UPGRADES).filter(([k, u]) => (u.cat || 'ship') === cat && !(k === 'escort' && net.mode === 'solo') && itemState(prof, k, u, why, escorts).can).length;
     return `<button class="tab ${shopTab === cat ? 'on' : ''}" data-tab="${cat}">${icon} ${name}${n ? `<span class="badge">${n}</span>` : ''}</button>`;
   }).join('');
   let items = '';
   for (const [key, u] of Object.entries(UPGRADES)) {
-    if ((u.cat || 'ship') !== shopTab) continue;
+    if ((u.cat || 'ship') !== shopTab || (key === 'escort' && net.mode === 'solo')) continue;
     const st = itemState(prof, key, u, why, escorts);
     const tag = st.stamp ? `<div class="stamp">${st.stamp}</div>`
       : `<button class="price ${st.can ? '' : 'poor'}" data-buy="${key}" ${st.can ? '' : 'disabled'}>🪙 ${st.cost}</button>`;
@@ -4432,6 +4769,10 @@ function updateHUD() {
   if (isAlive(me) && me.burnT > 0) { rep_.textContent = `🔥 burning ×${me.burnStacks || 1} — repairs slowed`; rep_.style.color = '#ffa860'; }
   else { rep_.textContent = isAlive(me) && me.repairing ? '🔧 repairing' : ''; rep_.style.color = '#8dffa0'; }
   if (isAlive(me) && me.kitT > 0) rep_.textContent = '🧰 patching hull';
+  // fleet health
+  const fl = prof && prof.fleet ? prof.fleet.filter(f => isAlive(f.ship)) : [];
+  const fh = fl.map(f => { const r = f.ship.hp / f.ship.maxHp; return `<div>⛵ ${esc(f.name)}<span class="bar"><div style="width:${Math.round(r * 100)}%;background:${r > 0.5 ? '#4fc05a' : r > 0.25 ? '#e0a020' : '#d03020'}"></div></span></div>`; }).join('');
+  if (fh !== updateHUD.fleet) { $('fleetHud').innerHTML = fh; updateHUD.fleet = fh; }
   // ammo + abilities bar
   if (prof) {
     const ammo = prof.ammo || 'round', cd = prof.cd || {};
@@ -4449,6 +4790,7 @@ function updateHUD() {
       html += `<div class="slot ${first ? 'gap' : ''} ${c > 0 ? 'cool' : ''}"><b>${a.key}</b>${a.icon} ${c > 0 ? Math.ceil(c) + 's' : a.name}</div>`;
       first = false;
     }
+    if (prof.fleet && prof.fleet.length) { const o = ORDERS[prof.order || 'follow']; html += `<div class="slot gap" title="${o.desc}"><b>V</b>${o.icon} ${o.name}</div>`; }
     const kc = cd.kit || 0, kn = prof.up.kit | 0;
     html += `<div class="slot gap ${kc > 0 ? 'cool' : ''} ${kn ? '' : 'off'}" title="Repair kit"><b>H</b>🧰 ${kc > 0 ? Math.ceil(kc) + 's' : '×' + kn}</div>`;
     if (html !== updateHUD.loadout) { $('loadout').innerHTML = html; updateHUD.loadout = html; }
@@ -4562,6 +4904,7 @@ addEventListener('keydown', (e) => {
   }
   keys[e.code] = true;
   if (e.code === 'Enter' && tut) { finishTutorial(); return; }
+  if (e.code === 'Enter' && state === 'playing' && net.mode === 'solo' && waveClearT > 0) { waveClearT = 0.01; return; }
   if (e.code === 'KeyN') { toggleMusic(); return; }
   if (e.code === 'KeyM' && (state === 'playing' || state === 'paused')) { toggleBigMap(); return; }
   if (e.code === 'KeyB' && gameActive && (state === 'playing' || shopOpen)) { shopOpen ? closeShop() : openShop(); return; }
@@ -4576,6 +4919,7 @@ addEventListener('keydown', (e) => {
   if (/^Digit[1-4]$/.test(e.code)) selectAmmo(AMMO_IDS[+e.code.slice(5) - 1]);
   if (e.code === 'KeyC') triggerAbility('special');
   if (e.code === 'KeyH') triggerKit();
+  if (e.code === 'KeyV') cycleFleetOrder();
   if (e.code === 'KeyF') triggerAbility('kegs');
   if (e.code === 'KeyR') triggerAbility('mortar');
   if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') triggerAbility('boost');
@@ -4639,7 +4983,7 @@ if (isTouch) {
   const act = {
     port: () => aimOrFire('port'), star: () => aimOrFire('star'), fire: () => fireSide(aimSide()), both: fireBoth,
     special: () => triggerAbility('special'), kegs: () => triggerAbility('kegs'), mortar: () => triggerAbility('mortar'), boost: () => triggerAbility('boost'),
-    g: actionG, kit: triggerKit, shop: () => { if (gameActive) shopOpen ? closeShop() : openShop(); }, map: () => toggleBigMap(), pause: () => pause(),
+    g: actionG, kit: triggerKit, orders: cycleFleetOrder, shop: () => { if (gameActive) shopOpen ? closeShop() : openShop(); }, map: () => toggleBigMap(), pause: () => pause(),
   };
   $('tbtns').addEventListener('touchstart', (e) => {
     const b = e.target.closest('[data-t]'); if (!b) return;
@@ -4713,7 +5057,7 @@ function step(dt) {
     const mp = profiles.get(myId);
     if (mp) { mp.input.steer = localSteer; mp.input.sail = mySail; }
     for (const p of profiles.values()) if (isAlive(p.ship)) { p.ship.steer = p.board ? 0 : p.input.steer; p.ship.sail = p.board ? 0 : p.input.sail; }
-    if (gameActive) {
+    if (gameActive && !inPort) {
       updateFleet(dt);
       for (const s of ships) if (s.kind !== 'p') updateAI(s, dt);   // enemies and escorts
       hostLogic(dt);
@@ -4736,9 +5080,10 @@ function step(dt) {
 
   const focus = focusPos();
   updateOcean(time, focus.x, focus.z);
-  updateCamera(dt, focus);
+  if (inPort) { updatePortCamera(dt); renderPort(); }
+  else updateCamera(dt, focus);
   updateAimPreview(time);
-  if (state !== 'menu' && state !== 'lobby') updateHUD();
+  if (state !== 'menu' && state !== 'lobby' && !inPort) updateHUD();
   netTick(dt);
 }
 
@@ -4752,7 +5097,7 @@ if (location.search.includes('debug')) window.__dbg = {
   wind, sailEfficiency, windFactor, startBoarding, resolveBoarding, boardCandidate,
   get kraken() { return kraken; }, get tut() { return tut; }, finishTutorial, get musicOn() { return musicOn; }, save, showQuarters, buyQuarters, giveTreasureMap, spawnMap, env, setWeather, spawnEnemyTest: spawnEnemy, get objective() { return objective; }, get waveEvent() { return waveEvent; }, eventFor,
   applyBurnTest(s, n, per) { s.lastHitT = -99; applyBurn(s, n, per, null); },
-  useKit, combatReason, openShop, get time() { return time; },
+  useKit, combatReason, openShop, get time() { return time; }, enterPort, leavePort, buyFleetShip, cycleFleetOrder, get inPort() { return inPort; },
 };
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
