@@ -122,6 +122,28 @@
   #panel td { padding: 3px 12px; }
   #panel td:first-child { color: #ffd977; text-align: right; white-space: nowrap; }
   #panel details { margin-top: 12px; cursor: pointer; }
+  /* ---- main menu: compact left column so the showcase ship stays visible ---- */
+  #overlay.menu #panel { width: min(440px, 94vw); padding: 22px 24px; text-align: left; }
+  #overlay.menu .mtitle { font-size: 52px; font-weight: bold; line-height: 1; color: #ffd977; text-shadow: 0 4px 0 #6b3d10; text-align: center; }
+  #overlay.menu .msub { font-style: italic; opacity: .8; text-align: center; margin: 4px 0 14px; }
+  #overlay.menu .mcard { padding: 10px 12px; margin-bottom: 10px; border-radius: 10px; background: rgba(0,0,0,.28); border: 1px solid rgba(201,164,92,.35); }
+  #overlay.menu .mlabel { display: block; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; opacity: .7; margin: 8px 0 4px; }
+  #overlay.menu .mcard > .mlabel:first-child { margin-top: 0; }
+  #overlay.menu .mrow { display: flex; gap: 6px; align-items: center; }
+  #overlay.menu .mrow button, #overlay.menu .mrow input { margin: 0; }
+  #overlay.menu input { font-size: 16px; padding: 7px 10px; text-align: left; }
+  #overlay.menu #codeIn { text-align: center; }
+  #overlay.menu .renown { padding: 6px 10px; border-radius: 16px; border: 2px solid #c9a45c; color: #ffd977; white-space: nowrap; }
+  #overlay.menu .mship { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 8px; font-size: 14px; }
+  #overlay.menu .mship i { opacity: .7; font-size: 12px; }
+  #overlay.menu button.small { margin: 0; padding: 5px 10px; font-size: 14px; white-space: nowrap; }
+  #overlay.menu .bigsail { display: block; width: 100%; margin: 0; padding: 14px; font-size: 26px; font-weight: bold; letter-spacing: 2px; }
+  #overlay.menu .seg { display: flex; border: 2px solid #c9a45c; border-radius: 8px; overflow: hidden; }
+  #overlay.menu .seg button { flex: 1; margin: 0; padding: 6px 4px; font-size: 15px; border: 0; border-radius: 0; box-shadow: none; background: rgba(0,0,0,.25); color: #f6e7c1; }
+  #overlay.menu .seg button + button { border-left: 1px solid rgba(201,164,92,.5); }
+  #overlay.menu .seg button.on { background: linear-gradient(#ffe39a, #d9a640); color: #2a1606; }
+  #overlay.menu .mnav { display: flex; gap: 6px; }
+  #overlay.menu .mnav button { flex: 1; margin: 0; font-size: 15px; padding: 8px; }
   .row { margin: 12px 0; }
   .err { color: #ff8a7a; margin: 8px 0; }
   .code { font-size: 54px; letter-spacing: 12px; color: #ffd977; font-weight: bold; user-select: text; }
@@ -142,6 +164,39 @@
   .card .cd { font-size: 13px; opacity: .85; margin: 4px 0; }
   .card .pips { color: #ffd977; letter-spacing: 3px; }
   .card button { font-size: 15px; padding: 6px 10px; }
+  /* ---- shipwright storefront ---- */
+  #shop .shopbox { position: relative; width: min(860px, 96vw); max-width: none !important; padding: 0 0 16px; overflow: hidden auto; text-align: left;
+    background: repeating-linear-gradient(90deg, rgba(0,0,0,0) 0 46px, rgba(0,0,0,.18) 46px 48px), linear-gradient(#5a3a1a, #3a2410); border: 4px solid #2a1606; outline: 2px solid #c9a45c; outline-offset: -8px; }
+  #shop .awning { height: 34px; background: repeating-linear-gradient(90deg, #b8322a 0 40px, #f3e3c0 40px 80px);
+    -webkit-mask: radial-gradient(20px 12px at 20px 22px, #000 99%, transparent) 0 0/40px 34px repeat-x, linear-gradient(#000, #000) 0 0/100% 22px no-repeat;
+            mask: radial-gradient(20px 12px at 20px 22px, #000 99%, transparent) 0 0/40px 34px repeat-x, linear-gradient(#000, #000) 0 0/100% 22px no-repeat; }
+  #shop .signboard { width: max-content; margin: 4px auto 6px; padding: 6px 28px; font-size: 30px; font-weight: bold; letter-spacing: 3px; color: #ffd977; text-shadow: 0 3px 0 #2a1606;
+    background: linear-gradient(#7a4f22, #4a2e12); border: 3px solid #c9a45c; border-radius: 10px; box-shadow: 0 6px 12px rgba(0,0,0,.5); }
+  #shop .shophead { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 0 22px; }
+  #shop .keeper { font-size: 14px; opacity: .85; }
+  #shop .purse { font-size: 20px; padding: 6px 14px; border-radius: 20px; background: rgba(0,0,0,.35); border: 2px solid #c9a45c; white-space: nowrap; }
+  #shop .purse b { color: #ffd977; }
+  #shop .hullrow { display: flex; align-items: center; gap: 10px; margin: 10px 22px 0; font-size: 14px; }
+  #shop .hullrow .bar { flex: 1; height: 12px; }
+  #shop .hullrow .hot { color: #ff9a80; } #shop .hullrow .calm { color: #9ff0a8; }
+  #shop .tabs { display: flex; gap: 4px; margin: 14px 22px 0; border-bottom: 3px solid #c9a45c; }
+  #shop .tab { margin: 0; padding: 8px 16px; font-size: 16px; border-radius: 10px 10px 0 0; border-bottom: 0; box-shadow: none; background: rgba(0,0,0,.3); color: #f6e7c1; border-color: #6b4a20; position: relative; }
+  #shop .tab.on { background: linear-gradient(#ffe39a, #d9a640); color: #2a1606; border-color: #c9a45c; }
+  #shop .badge { margin-left: 6px; padding: 0 6px; font-size: 12px; border-radius: 9px; background: #2f9a3a; color: #fff; }
+  #shop .wares { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; padding: 14px 22px; background: rgba(0,0,0,.22); margin: 0 22px; border-radius: 0 0 10px 10px; min-height: 230px; align-content: start; }
+  #shop .ware { display: flex; gap: 10px; align-items: flex-start; position: relative; padding: 10px; border-radius: 10px; background: linear-gradient(#f3e3c0, #dcc595); color: #2a1606; border: 2px solid #8a6a30; box-shadow: 0 3px 0 #2a1606; }
+  #shop .ware.done { filter: saturate(.4); opacity: .75; }
+  #shop .wicon { flex: none; width: 46px; height: 46px; display: flex; align-items: center; justify-content: center; font-size: 28px; border-radius: 50%; background: #3a2410; border: 2px solid #c9a45c; }
+  #shop .wbody { flex: 1; min-width: 0; padding-bottom: 34px; }
+  #shop .wn { font-size: 16px; font-weight: bold; }
+  #shop .wd { font-size: 12.5px; margin: 3px 0; opacity: .85; }
+  #shop .wl { font-size: 12px; } #shop .wl .pips { color: #a06a10; letter-spacing: 2px; }
+  #shop .wnote { font-size: 12px; color: #a02010; margin-top: 3px; }
+  #shop .price { position: absolute; right: 8px; bottom: 8px; margin: 0; padding: 4px 14px; font-size: 16px; font-weight: bold; }
+  #shop .price.poor { color: #8a1a10; }
+  #shop .stamp { position: absolute; right: 8px; bottom: 8px; padding: 2px 10px; font-size: 13px; font-weight: bold; letter-spacing: 2px; color: #8a1a10; border: 2px solid #8a1a10; border-radius: 6px; transform: rotate(-6deg); }
+  #shop .shopfoot { display: flex; align-items: center; gap: 14px; padding: 12px 22px 0; font-size: 13px; }
+  #shop .shopfoot span { opacity: .7; }
 </style>
 </head>
 <body>
@@ -152,7 +207,7 @@
     <div id="stats"><span id="gold">Gold: 0</span> &nbsp;·&nbsp; <span id="wave">Wave 1</span> &nbsp;·&nbsp; <span id="foes"></span></div>
     <div id="objective"></div>
     <div id="treasureTxt"></div>
-    <div id="hint">[B] Shipwright — spend gold on upgrades</div>
+    <div id="hint">[B] Shipwright · [H] Repair kit</div>
   </div>
   <div id="bossbar"><div id="bossName"></div><div class="bar"><div id="bossFill"></div></div></div>
   <canvas id="compass" width="130" height="168"></canvas>
@@ -188,7 +243,7 @@
     <button data-t="up">▲ Range</button><button data-t="both">⇆ Both</button><button data-t="down">▼ Range</button>
     <button data-t="special">C</button><button data-t="kegs">F</button><button data-t="mortar">R</button>
     <button data-t="boost">💨</button><button data-t="g">G</button><button data-t="shop">🛠</button>
-    <button data-t="map">🗺</button><button data-t="pause">⏸</button>
+    <button data-t="kit">🧰</button><button data-t="map">🗺</button><button data-t="pause">⏸</button>
   </div>
 </div>
 <div id="shop"><div class="shopbox" id="shopBox"></div></div>
@@ -290,10 +345,23 @@ const ABILITIES = {
   boost: { key: 'Shift', name: 'Boost', icon: '💨', cd: (L) => 20 - 2 * L },
 };
 function freshUp() {
-  return { armor: 0, guns: 0, reload: 0, sails: 0, cannons: 0, carpenters: 0, ammo_chain: 0, ammo_fire: 0, ammo_explosive: 0, kegs: 0, mortar: 0, boost: 0 };
+  return { armor: 0, guns: 0, reload: 0, sails: 0, cannons: 0, carpenters: 0, ammo_chain: 0, ammo_fire: 0, ammo_explosive: 0, kegs: 0, mortar: 0, boost: 0, kit: 1 };
 }
 const REPAIR_GOLD_PER_HP = 0.75;   // repairs cost per point restored, so big hulls pay more
 function repairCost(s) { return s ? Math.max(20, Math.ceil((s.maxHp - s.hp) * REPAIR_GOLD_PER_HP)) : 0; }
+// Full repairs and restocking kits only happen out of combat, so the shop can't be used as a mid-fight heal.
+// In a fight the captain relies on repair kits: a heal over time with a cooldown and a small stock.
+const KIT_COST = 120, KIT_MAX = 3, KIT_HEAL = 0.4, KIT_TIME = 6, KIT_CD = 20, COMBAT_CALM = 8, COMBAT_RANGE = 80;
+// why a ship counts as in combat: '' when calm, else a short reason for the shop
+function combatReason(s) {
+  if (!isAlive(s)) return '';
+  if (s.remote) return s.netCombat ? 'under fire' : '';
+  if (time - s.lastHitT < COMBAT_CALM) return 'under fire';
+  if (time - s.lastFireT < COMBAT_CALM) return 'guns still hot';
+  for (const o of ships) if (isAlive(o) && o !== s && teamOf(o) !== teamOf(s) && Math.hypot(o.pos.x - s.pos.x, o.pos.z - s.pos.z) < COMBAT_RANGE) return 'enemies close';
+  if (kraken && !kraken.dead && !kraken.dying && Math.hypot(kraken.x - s.pos.x, kraken.z - s.pos.z) < COMBAT_RANGE + 20) return 'the Kraken is close';
+  return '';
+}
 const UPGRADES = {
   armor:   { icon: '🛡', name: 'Reinforced Hull', desc: '+30 max hull', max: 5, cost: [150, 250, 400, 600, 850] },
   guns:    { icon: '💥', name: 'Heavy Shot', desc: '+2.5 damage per shot', max: 5, cost: [200, 320, 480, 700, 950] },
@@ -308,7 +376,8 @@ const UPGRADES = {
   mortar: { cat: 'ability', icon: '🎯', name: 'Mortar Strike', desc: 'Key R · shells rain on your aim zone (levels: more shells, more damage)', max: 3, cost: [1200, 1700, 2300] },
   boost: { cat: 'ability', icon: '💨', name: 'Oars & Extra Canvas', desc: 'Shift · +60% speed burst (levels: longer, shorter cooldown)', max: 3, cost: [500, 800, 1200] },
   escort: { cat: 'crew', icon: '🚢', name: 'Hire Escort', desc: 'An allied frigate sails and fights beside you (co-op, max 2)', max: Infinity },
-  repair:  { cat: 'crew', icon: '🔨', name: 'Field Repairs', desc: 'Restore full hull (price grows with damage)', max: Infinity },
+  kit:     { cat: 'crew', icon: '🧰', name: 'Repair Kit', desc: 'Key H · patch 40% hull over 6s and douse fires (20s cooldown). Carry up to 3', max: KIT_MAX },
+  repair:  { cat: 'crew', icon: '🔨', name: 'Dry-dock Repairs', desc: 'Restore full hull. Only when out of combat — price grows with damage', max: Infinity },
 };
 const BOSS_NAMES = ['The Black Kraken', "Leviathan's Wrath", 'The Crimson Tide', 'Dread Galleon Morrow', 'The Sea Hag'];
 
@@ -880,7 +949,7 @@ class Ship {
     this.fxT = 0; this.wakeT = 0; this.bumpCd = 0;
     this.prefRange = rand(45, 70);
     this.slowT = 0; this.burnT = 0; this.burnDps = 0; this.burnBy = null; this.burnStacks = 0; this.burnTick = BURN_TICK; this.boostT = 0; this.burnFx = 0;
-    this.regen = 0; this.regenDelay = 6; this.lastHitT = -99; this.repairing = false;
+    this.regen = 0; this.regenDelay = 6; this.lastHitT = -99; this.lastFireT = -99; this.repairing = false; this.kitT = 0; this.kitRate = 0; this.netCombat = false;
     this.role = null; this.flank = Math.random() < 0.5 ? -1 : 1; this.slotOff = rand(-1.2, 1.2); this.losShift = 0;
     this.mortarT = rand(3, 6); this.reloadMul = 1; this.aground = false;
     this.listSide = Math.random() < 0.5 ? -1 : 1; this.isTorn = false;
@@ -981,6 +1050,7 @@ class Ship {
       if (this.regen && this.hp < this.maxHp && time - this.lastHitT > this.regenDelay) {
         this.hp = Math.min(this.maxHp, this.hp + this.regen * dt * (this.burnT > 0 ? 0.3 : 1)); this.repairing = true;
       } else this.repairing = false;
+      if (this.kitT > 0) { this.kitT -= dt; this.hp = Math.min(this.maxHp, this.hp + this.kitRate * dt); this.repairing = true; }
       // deep hulls drag and scrape in shallow water; small ships (sloops, raiders) float over it
       let drag = 1;
       if (this.scale >= 0.95) {
@@ -1076,6 +1146,7 @@ class Ship {
     if (this.sinking || this.dead || this.grappled || this.reload[side] > 0) return false;
     const ammo = this.ammo || 'round';
     this.reload[side] = this.reloadTime * (AMMO[ammo].reload || 1);
+    this.lastFireT = time;
     const sgn = side === 'port' ? 1 : -1;
     const order = [...this.cannonZ].sort(() => Math.random() - 0.5);
     order.forEach((cz, i) => after(i * 0.11 + rand(0, 0.05), () => this.fireCannon(side, sgn, cz, elev, ammo)));
@@ -2491,7 +2562,7 @@ function runTimers(dt) {
 }
 
 function makeProfile(id, name, colorIdx, design = DEFAULT_DESIGN, meta = {}) {
-  return { id, name, colorIdx, meta, trait: meta.trait || '', design: cleanDesign(design), gold: 0, earned: 0, kills: 0, up: freshUp(), ammo: 'round', cd: { kegs: 0, mortar: 0, boost: 0, special: 0 },
+  return { id, name, colorIdx, meta, trait: meta.trait || '', design: cleanDesign(design), gold: 0, earned: 0, kills: 0, up: freshUp(), ammo: 'round', cd: { kegs: 0, mortar: 0, boost: 0, special: 0, kit: 0 },
            ship: null, respawnT: 0, gen: 0, input: { steer: 0, sail: 2 / 3 } };
 }
 function goldMul(prof) { return (prof.trait === 'quartermaster' ? 1.15 : 1) * (SHIP_CLASSES[prof.design ? prof.design.cls : 'frigate'].goldMul || 1); }
@@ -2581,7 +2652,7 @@ function startMatch() {
   for (const p of profiles.values()) {
     if (p.id === myId) { p.meta = myMeta(); p.design = cleanDesign(myDesign); }
     const m = p.meta || {};
-    Object.assign(p, { treasure: null, gold: 0, earned: 0, kills: 0, up: freshUp(), ammo: 'round', cd: { kegs: 0, mortar: 0, boost: 0, special: 0 }, respawnT: 0, input: { steer: 0, sail: 2 / 3 } });
+    Object.assign(p, { treasure: null, gold: 0, earned: 0, kills: 0, up: freshUp(), ammo: 'round', cd: { kegs: 0, mortar: 0, boost: 0, special: 0, kit: 0 }, respawnT: 0, input: { steer: 0, sail: 2 / 3 } });
     // renown bonuses, and a war chest when starting at a later wave
     p.trait = TRAITS[m.trait] ? m.trait : '';
     p.gold = clamp(m.seed | 0, 0, 3) * 200 + (startWaveSel - 1) * 300;
@@ -3019,10 +3090,10 @@ function hostLogic(dt) {
       waveClearT = 7;
       announce(`Wave ${wave} cleared!`, 2.5);
       for (const p of profiles.values()) {
-        if (isAlive(p.ship)) p.ship.hp = Math.min(p.ship.maxHp, p.ship.hp + 20);
+        if (isAlive(p.ship)) p.ship.hp += (p.ship.maxHp - p.ship.hp) * 0.5;   // crew patches half the damage between waves
         giveGold(p, 50 * wave);
       }
-      after(2.6, () => notify(`+${50 * wave} gold bounty — press B to visit the shipwright`));
+      after(2.6, () => notify(`+${50 * wave} gold bounty · hull half patched — press B for repairs & kits`));
     }
     waveClearT -= dt;
     if (waveClearT <= 0) { waveClearT = -1; startWave(wave + 1); }
@@ -3117,6 +3188,18 @@ function useAbility(prof, k, ax, az, elev = 0.2) {
   sfxFor('bell', prof);
 }
 
+// repair kit: heal over time and put out fires; limited stock with a cooldown
+function useKit(prof) {
+  const s = prof.ship;
+  if (!isAlive(s) || !gameActive || (prof.up.kit | 0) <= 0 || (prof.cd.kit || 0) > 0 || s.hp >= s.maxHp) return;
+  prof.up.kit--;
+  prof.cd.kit = KIT_CD;
+  s.kitT = KIT_TIME; s.kitRate = s.maxHp * KIT_HEAL / KIT_TIME;
+  s.burnT = 0; s.burnStacks = 0;
+  notify(`🧰 Carpenters patching the hull! (${prof.up.kit} kit${prof.up.kit === 1 ? '' : 's'} left)`, prof);
+  sfxFor('pickup', prof);
+}
+
 function applyBuy(prof, key) {
   const u = UPGRADES[key];
   if (!u) return;
@@ -3131,9 +3214,16 @@ function applyBuy(prof, key) {
     sfxFor('bell', prof);
     return;
   }
+  if (key === 'repair' || key === 'kit') {
+    const why = combatReason(s);
+    if (why) { notify(`The shipwright can't work while ${why}!`, prof); return; }
+  }
   if (key === 'repair') {
     if (!isAlive(s) || s.hp >= s.maxHp) return;
     cost = repairCost(s);
+  } else if (key === 'kit') {
+    if (lvl >= KIT_MAX) return;
+    cost = KIT_COST;
   } else {
     if (lvl >= u.max) return;
     cost = u.cost[lvl];
@@ -3141,12 +3231,13 @@ function applyBuy(prof, key) {
   if (prof.gold < cost) return;
   prof.gold -= cost;
   if (key === 'repair') s.hp = s.maxHp;
+  else if (key === 'kit') prof.up.kit = lvl + 1;
   else {
     prof.up[key] = lvl + 1;
     if (s && !s.dead) s.applyStats(prof);
     if (u.cat === 'ammo') { prof.ammo = key.slice(5); if (s) s.ammo = prof.ammo; }   // auto-load newly bought ammo
   }
-  notify(`${u.name}${key === 'repair' ? '' : ' — level ' + (lvl + 1)}!`, prof);
+  notify(key === 'repair' ? `${u.name}!` : key === 'kit' ? `🧰 Repair kit stowed (${lvl + 1}/${KIT_MAX})` : `${u.name} — level ${lvl + 1}!`, prof);
   sfxFor('pickup', prof);
 }
 
@@ -3237,6 +3328,7 @@ function onGuestMsg(conn, m) {
     case 'buy':
       if (prof && gameActive) applyBuy(prof, String(m.k));
       break;
+    case 'kit': if (prof) useKit(prof); break;
   }
 }
 
@@ -3258,7 +3350,7 @@ function buildSnapshot() {
       s.id, s.kind, r2(s.pos.x), r2(s.pos.z), r2(s.heading), r2(s.speed), r2(s.sail),
       Math.ceil(s.hp), s.maxHp, s.sinking ? 1 : 0, s.colorIdx, s.cannonCount,
       r2(s.reload.port), r2(s.reload.star), r2(s.reloadTime), s.pid, s.name, s.design ? designArr(s.design) : s.aiType ? ['ai', s.aiType.scale, s.aiType.masts, s.role] : 0,
-      (s.burnT > 0 ? 1 : 0) | (s.slowT > 0 ? 2 : 0) | (s.boostT > 0 ? 4 : 0) | (s.repairing ? 8 : 0) | (s.smokeT > 0 ? 16 : 0) | (Math.min(7, s.burnStacks | 0) << 5)]),
+      (s.burnT > 0 ? 1 : 0) | (s.slowT > 0 ? 2 : 0) | (s.boostT > 0 ? 4 : 0) | (s.repairing ? 8 : 0) | (s.smokeT > 0 ? 16 : 0) | (Math.min(7, s.burnStacks | 0) << 5) | (s.kind === 'p' && combatReason(s) ? 256 : 0)]),
     f: forts.map(f => [Math.ceil(f.hp), f.destroyed ? 1 : 0, r2(f.aim), f.maxHp]),
     c: crates.map(c => [c.id, r2(c.x), r2(c.z), c.type]),
     ob: objective,
@@ -3406,7 +3498,7 @@ function applySnapshot(m) {
     s.sail = sail; s.maxHp = maxHp;
     if (des && des[0] === 'ai') s.role = des[3];
     s.kind = kind;
-    s.burnT = fl & 1 ? 0.3 : 0; s.slowT = fl & 2 ? 0.3 : 0; s.boostT = fl & 4 ? 0.3 : 0; s.repairing = !!(fl & 8); s.smokeT = fl & 16 ? 0.3 : 0; s.burnStacks = (fl >> 5) & 7;
+    s.burnT = fl & 1 ? 0.3 : 0; s.slowT = fl & 2 ? 0.3 : 0; s.boostT = fl & 4 ? 0.3 : 0; s.repairing = !!(fl & 8); s.smokeT = fl & 16 ? 0.3 : 0; s.burnStacks = (fl >> 5) & 7; s.netCombat = !!(fl & 256);
     if (pid === myId && hp < s.hp - 0.5) hurtFx();
     s.hp = hp;
     s.reload.port = rp; s.reload.star = rs; s.reloadTime = rt;
@@ -3475,7 +3567,8 @@ const CONTROLS = `
     <tr><td>G</td><td>Board a crippled enemy alongside (below 35% hull), then 1 / 2 / 3 to plunder, capture or scuttle — or dig at a treasure X</td></tr>
     <tr><td>C</td><td>Your ship class's signature move (smoke / rapid reload / all guns)</td></tr>
     <tr><td>F / R / Shift</td><td>Abilities: powder kegs / mortar strike / speed burst</td></tr>
-    <tr><td>B</td><td>Shipwright — buy upgrades &amp; repairs</td></tr>
+    <tr><td>H</td><td>Use a repair kit — heals 40% over 6s and puts out fires</td></tr>
+    <tr><td>B</td><td>Shipwright — upgrades, kits &amp; repairs (repairs only out of combat)</td></tr>
     <tr><td>N</td><td>Music on / off</td></tr>
     <tr><td>M</td><td>Big map of the sea (islands, shallows, reefs, forts)</td></tr>
     <tr><td>Wheel</td><td>Zoom camera</td></tr>
@@ -3498,17 +3591,29 @@ function showMainMenu(msg = '') {
   clearEntities(); profiles.clear(); netPlayers.clear();
   refreshMenuShip();
   const mc = SHIP_CLASSES[myDesign.cls];
-  setOverlay(`<h1>BROADSIDE!</h1><h2>Pirate ship battles on the high seas</h2>
+  const tr = myMeta().trait ? TRAITS[myMeta().trait] : null;
+  const seg = (items) => `<div class="seg">${items}</div>`;
+  setOverlay(`<div class="mtitle">BROADSIDE!</div><div class="msub">Pirate ship battles on the high seas</div>
     ${msg ? `<div class="err">${esc(msg)}</div>` : ''}
-    <div class="row">Captain name: <input id="nameIn" maxlength="16" value="${esc(myName)}"></div>
-    <div class="row">⭐ <b>${save.renown}</b> renown · Your ship: <b>${mc.name}</b>${myMeta().trait ? ' · ' + TRAITS[myMeta().trait].icon + ' ' + TRAITS[myMeta().trait].name : ''}</div>
-    <div class="row"><button class="ghost" data-act="shipyard">🛠 Shipyard</button> <button class="ghost" data-act="quarters">🏛 Captain's Quarters</button> <button class="ghost" data-act="hall">🏆 Hall of Fame</button></div>
-    <div class="row">Difficulty: ${Object.values(DIFFS).map(d => `<button class="${DIFF.key === d.key ? '' : 'ghost'}" data-act="diff-${d.key}" style="padding:6px 14px">${d.name}</button>`).join('')}</div>
-    ${save.bestWave >= 6 ? `<div class="row">Start at wave: ${START_WAVES.filter(w => w <= save.bestWave).map(w => `<button class="${startWaveSel === w ? '' : 'ghost'}" data-act="sw-${w}" style="padding:6px 14px">${w}</button>`).join('')}</div>` : ''}
-    <div class="row"><button data-act="solo">⚓ Solo Voyage</button> <button data-act="host">🏴‍☠️ Host Online Game</button></div>
-    <div class="row"><input id="codeIn" maxlength="5" placeholder="CODE" value="${esc(net.lastCode || '')}" style="width:140px;text-transform:uppercase;letter-spacing:4px"> <button data-act="join">${net.lastCode && msg ? '↻ Retry Join' : 'Join Online Game'}</button></div>
-    <div style="opacity:.75;font-size:14px">Bosses every 5th wave · Forts guard some islands · Up to 4 captains online (co-op or PvP)</div>
-    <details><summary>Controls</summary>${CONTROLS}</details>`);
+    <div class="mcard">
+      <label class="mlabel">Captain</label>
+      <div class="mrow"><input id="nameIn" maxlength="16" value="${esc(myName)}" style="flex:1"><span class="renown" title="Spend renown in the Captain's Quarters">⭐ ${save.renown}</span></div>
+      <div class="mship"><span>🚢 <b>${mc.name}</b> <i>${mc.tag}</i>${tr ? ` · ${tr.icon} ${tr.name}` : ''}</span><button class="ghost small" data-act="shipyard">🛠 Shipyard</button></div>
+    </div>
+    <div class="mcard">
+      <button class="bigsail" data-act="solo">⚓ Set Sail</button>
+      <label class="mlabel">Difficulty</label>
+      ${seg(Object.values(DIFFS).map(d => `<button class="${DIFF.key === d.key ? 'on' : ''}" data-act="diff-${d.key}">${d.name}</button>`).join(''))}
+      ${save.bestWave >= 6 ? `<label class="mlabel">Start at wave</label>${seg(START_WAVES.filter(w => w <= save.bestWave).map(w => `<button class="${startWaveSel === w ? 'on' : ''}" data-act="sw-${w}">${w}</button>`).join(''))}` : ''}
+    </div>
+    <div class="mcard">
+      <label class="mlabel">Online · up to 4 captains, co-op or PvP</label>
+      <div class="mrow"><button class="ghost" data-act="host" style="flex:1">🏴‍☠️ Host</button>
+        <input id="codeIn" maxlength="5" placeholder="CODE" value="${esc(net.lastCode || '')}" style="width:120px;text-transform:uppercase;letter-spacing:4px">
+        <button class="ghost" data-act="join">${net.lastCode && msg ? '↻ Retry' : 'Join'}</button></div>
+    </div>
+    <div class="mnav"><button class="ghost" data-act="quarters">🏛 Captain's Quarters</button><button class="ghost" data-act="hall">🏆 Hall of Fame</button></div>
+    <details><summary>⌨ Controls</summary>${CONTROLS}</details>`, 'side menu');
 }
 
 // rebuild the showcase ship on the menu so the current design is visible
@@ -3740,7 +3845,10 @@ function myProf() { return net.mode === 'guest' ? netPlayers.get(myId) : profile
 function openShop() {
   if (!gameActive || shopOpen) return;
   shopOpen = true;
-  renderShop.sig = null; renderShop();
+  renderShop.sig = null; renderShop.quip = null;
+  const prof = myProf();
+  if (me && me.hp < me.maxHp * 0.6 && prof) shopTab = 'crew';   // badly hurt: open on supplies
+  renderShop();
   $('shop').style.display = 'flex';
   if (document.pointerLockElement) document.exitPointerLock();
 }
@@ -3750,41 +3858,67 @@ function closeShop(silent = false) {
   $('shop').style.display = 'none';
   if (!silent && state === 'playing') { lockPointer(); clock.getDelta(); }
 }
+let shopTab = 'ship';
+const SHOP_TABS = [['ship', '⛵', 'Ship'], ['ammo', '💣', 'Ammo'], ['ability', '🎯', 'Abilities'], ['crew', '🧰', 'Supplies']];
+const SHOP_QUIPS = ['"Fine timber, finer prices, captain."', '"Pay up front — the sea keeps no IOUs."', '"Every plank hand-picked, I swear on me mother."', '"Leaky hull? I can fix that. For a price."'];
 function renderShop() {
   const prof = myProf();
   if (!prof) return;
-  const sig = JSON.stringify([prof.gold, prof.up, me ? Math.ceil(me.hp) : 0, me ? me.maxHp : 0, ships.filter(x => x.kind === 'a' && isAlive(x)).length]);
+  const why = combatReason(me);
+  const sig = JSON.stringify([prof.gold, prof.up, me ? Math.ceil(me.hp) : 0, me ? me.maxHp : 0, ships.filter(x => x.kind === 'a' && isAlive(x)).length, shopTab, why]);
   if (sig === renderShop.sig) return;
   renderShop.sig = sig;
-  let html = `<h2>⚓ The Shipwright</h2><div class="gold">💰 ${prof.gold} gold</div>`;
-  const sections = [['ship', 'Ship upgrades'], ['ammo', 'Special ammo'], ['ability', 'Abilities'], ['crew', 'Crew & repairs']];
+  if (!renderShop.quip) renderShop.quip = SHOP_QUIPS[Math.floor(Math.random() * SHOP_QUIPS.length)];
   const escorts = net.mode === 'guest' ? ships.filter(x => x.kind === 'a' && x.name === prof.name + "'s escort" && isAlive(x)).length : escortCount(prof);
-  for (const [cat, title] of sections) {
-    html += `<h3>${title}</h3><div class="cards">`;
-    for (const [key, u] of Object.entries(UPGRADES)) {
-      if ((u.cat || 'ship') !== cat) continue;
-      const lvl = prof.up[key] || 0;
-      let cost, maxed = false, info, can;
-      if (key === 'repair') {
-        cost = repairCost(me); info = me ? `${Math.ceil(me.hp)} / ${me.maxHp}` : '';
-        can = isAlive(me) && me.hp < me.maxHp && prof.gold >= cost;
-      } else if (key === 'escort') {
-        cost = ESCORT_COST; info = gameMode === 'coop' ? `${escorts} / ${MAX_ESCORTS} sailing` : 'co-op only';
-        maxed = escorts >= MAX_ESCORTS;
-        can = gameMode === 'coop' && isAlive(me) && !maxed && prof.gold >= cost;
-      } else {
-        maxed = lvl >= u.max; cost = maxed ? 0 : u.cost[lvl];
-        info = u.max === 1 ? (lvl ? 'Owned' : 'Not owned') : '●'.repeat(lvl) + '○'.repeat(u.max - lvl);
-        can = !maxed && prof.gold >= cost;
-      }
-      html += `<div class="card"><div class="cn">${u.icon} ${u.name}</div><div class="cd">${u.desc}</div><div class="pips">${info}</div>
-        <button data-buy="${key}" ${can ? '' : 'disabled'}>${maxed ? (u.max === 1 ? 'OWNED' : key === 'escort' ? 'FULL' : 'MAXED') : cost + ' gold'}</button></div>`;
-    }
-    html += `</div>`;
+  const hpPct = me ? clamp(me.hp / me.maxHp, 0, 1) : 0;
+  const tabs = SHOP_TABS.map(([cat, icon, name]) => {
+    const n = Object.entries(UPGRADES).filter(([k, u]) => (u.cat || 'ship') === cat && itemState(prof, k, u, why, escorts).can).length;
+    return `<button class="tab ${shopTab === cat ? 'on' : ''}" data-tab="${cat}">${icon} ${name}${n ? `<span class="badge">${n}</span>` : ''}</button>`;
+  }).join('');
+  let items = '';
+  for (const [key, u] of Object.entries(UPGRADES)) {
+    if ((u.cat || 'ship') !== shopTab) continue;
+    const st = itemState(prof, key, u, why, escorts);
+    const tag = st.stamp ? `<div class="stamp">${st.stamp}</div>`
+      : `<button class="price ${st.can ? '' : 'poor'}" data-buy="${key}" ${st.can ? '' : 'disabled'}>🪙 ${st.cost}</button>`;
+    items += `<div class="ware ${st.stamp ? 'done' : ''}"><div class="wicon">${u.icon}</div>
+      <div class="wbody"><div class="wn">${u.name}</div><div class="wd">${u.desc}</div><div class="wl">${st.info}</div>
+      ${st.note ? `<div class="wnote">${st.note}</div>` : ''}</div>${tag}</div>`;
   }
-  html += `<button class="ghost" data-close="1">Back to sea (B)</button>
-    ${net.mode === 'solo' ? '<div style="opacity:.7;font-size:13px;margin-top:6px">Time is paused while you shop.</div>' : '<div style="opacity:.7;font-size:13px;margin-top:6px">Careful — the battle continues while you shop!</div>'}`;
-  $('shopBox').innerHTML = html;
+  $('shopBox').innerHTML = `<div class="awning"></div>
+    <div class="signboard">⚓ The Shipwright ⚓</div>
+    <div class="shophead">
+      <div class="keeper">🧔‍♂️ <i>${renderShop.quip}</i></div>
+      <div class="purse">💰 <b>${prof.gold}</b> gold</div>
+    </div>
+    <div class="hullrow"><span>Hull</span><div class="bar"><div style="width:${hpPct * 100}%"></div></div><span>${me ? Math.ceil(me.hp) + ' / ' + me.maxHp : '—'}</span>
+      <span class="${why ? 'hot' : 'calm'}">${why ? `⚔ In combat (${why})` : '⚓ Safe harbour'}</span></div>
+    <div class="tabs">${tabs}</div>
+    <div class="wares">${items}</div>
+    <div class="shopfoot"><button class="ghost" data-close="1">Back to sea (B)</button>
+      <span>${net.mode === 'solo' ? 'Time is paused while you shop.' : 'Careful — the battle continues while you shop!'}</span></div>`;
+}
+// price, level and whether the item can be bought right now
+function itemState(prof, key, u, why, escorts) {
+  const lvl = prof.up[key] || 0, gold = prof.gold;
+  if (key === 'repair') {
+    const cost = repairCost(me), full = !me || me.hp >= me.maxHp;
+    if (full) return { stamp: 'HULL SOUND', info: '', can: false };
+    return { cost, info: `Restores ${Math.ceil(me.maxHp - me.hp)} hull`, note: why ? `⚔ Can't haul out while ${why}` : '', can: !why && isAlive(me) && gold >= cost };
+  }
+  if (key === 'kit') {
+    const info = `In the hold: ${'🧰'.repeat(lvl)}${'▫'.repeat(KIT_MAX - lvl)} ${lvl}/${KIT_MAX}`;
+    if (lvl >= KIT_MAX) return { stamp: 'HOLD FULL', info, can: false };
+    return { cost: KIT_COST, info, note: why ? `⚔ Restock once out of combat (${why}) — use kits with H` : '', can: !why && gold >= KIT_COST };
+  }
+  if (key === 'escort') {
+    if (gameMode !== 'coop') return { stamp: 'CO-OP ONLY', info: '', can: false };
+    const full = escorts >= MAX_ESCORTS, info = `${escorts} / ${MAX_ESCORTS} sailing`;
+    return full ? { stamp: 'FLEET FULL', info, can: false } : { cost: ESCORT_COST, info, can: isAlive(me) && gold >= ESCORT_COST };
+  }
+  const info = u.max === 1 ? '' : `<span class="pips">${'●'.repeat(lvl)}${'○'.repeat(u.max - lvl)}</span> level ${lvl}/${u.max}`;
+  if (lvl >= u.max) return { stamp: u.max === 1 ? 'OWNED' : 'MAXED', info, can: false };
+  return { cost: u.cost[lvl], info, can: gold >= u.cost[lvl] };
 }
 $('boardPanel').addEventListener('click', (e) => { const b = e.target.closest('[data-bc]'); if (b) boardChoice(b.dataset.bc); });
 $('shop').addEventListener('click', (e) => {
@@ -3795,6 +3929,8 @@ $('shop').addEventListener('click', (e) => {
     renderShop.sig = null; renderShop();
     return;
   }
+  const t = e.target.closest('[data-tab]');
+  if (t) { shopTab = t.dataset.tab; renderShop(); return; }
   if (e.target.closest('[data-close]')) closeShop();
 });
 
@@ -3992,6 +4128,15 @@ function selectAmmo(k) {
   else { prof.ammo = k; if (prof.ship) prof.ship.ammo = k; }
   toast(`${a.icon} ${a.name} shot loaded`);
 }
+function triggerKit() {
+  const prof = myProf();
+  if (!prof || !isAlive(me)) return;
+  if ((prof.up.kit | 0) <= 0) { toast('No repair kits — restock at the shipwright (B) when out of combat'); return; }
+  if ((prof.cd.kit || 0) > 0) { toast(`Repair kit ready in ${Math.ceil(prof.cd.kit)}s`); return; }
+  if (me.hp >= me.maxHp) { toast('Hull is already sound'); return; }
+  if (net.mode === 'guest') sendToHost({ t: 'kit' });
+  else useKit(prof);
+}
 function triggerAbility(k) {
   const prof = myProf();
   if (!prof || !isAlive(me)) return;
@@ -4170,6 +4315,7 @@ function updateHUD() {
   const rep_ = $('repairing');
   if (isAlive(me) && me.burnT > 0) { rep_.textContent = `🔥 burning ×${me.burnStacks || 1} — repairs slowed`; rep_.style.color = '#ffa860'; }
   else { rep_.textContent = isAlive(me) && me.repairing ? '🔧 repairing' : ''; rep_.style.color = '#8dffa0'; }
+  if (isAlive(me) && me.kitT > 0) rep_.textContent = '🧰 patching hull';
   // ammo + abilities bar
   if (prof) {
     const ammo = prof.ammo || 'round', cd = prof.cd || {};
@@ -4187,6 +4333,8 @@ function updateHUD() {
       html += `<div class="slot ${first ? 'gap' : ''} ${c > 0 ? 'cool' : ''}"><b>${a.key}</b>${a.icon} ${c > 0 ? Math.ceil(c) + 's' : a.name}</div>`;
       first = false;
     }
+    const kc = cd.kit || 0, kn = prof.up.kit | 0;
+    html += `<div class="slot gap ${kc > 0 ? 'cool' : ''} ${kn ? '' : 'off'}" title="Repair kit"><b>H</b>🧰 ${kc > 0 ? Math.ceil(kc) + 's' : '×' + kn}</div>`;
     if (html !== updateHUD.loadout) { $('loadout').innerHTML = html; updateHUD.loadout = html; }
   }
   const lvl = Math.round(mySail * 3);
@@ -4309,6 +4457,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyG') actionG();
   if (/^Digit[1-4]$/.test(e.code)) selectAmmo(AMMO_IDS[+e.code.slice(5) - 1]);
   if (e.code === 'KeyC') triggerAbility('special');
+  if (e.code === 'KeyH') triggerKit();
   if (e.code === 'KeyF') triggerAbility('kegs');
   if (e.code === 'KeyR') triggerAbility('mortar');
   if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') triggerAbility('boost');
@@ -4372,7 +4521,7 @@ if (isTouch) {
   const act = {
     port: () => aimOrFire('port'), star: () => aimOrFire('star'), fire: () => fireSide(aimSide()), both: fireBoth,
     special: () => triggerAbility('special'), kegs: () => triggerAbility('kegs'), mortar: () => triggerAbility('mortar'), boost: () => triggerAbility('boost'),
-    g: actionG, shop: () => { if (gameActive) shopOpen ? closeShop() : openShop(); }, map: () => toggleBigMap(), pause: () => pause(),
+    g: actionG, kit: triggerKit, shop: () => { if (gameActive) shopOpen ? closeShop() : openShop(); }, map: () => toggleBigMap(), pause: () => pause(),
   };
   $('tbtns').addEventListener('touchstart', (e) => {
     const b = e.target.closest('[data-t]'); if (!b) return;
@@ -4485,6 +4634,7 @@ if (location.search.includes('debug')) window.__dbg = {
   wind, sailEfficiency, windFactor, startBoarding, resolveBoarding, boardCandidate,
   get kraken() { return kraken; }, get tut() { return tut; }, finishTutorial, get musicOn() { return musicOn; }, save, showQuarters, buyQuarters, giveTreasureMap, spawnMap, env, setWeather, spawnEnemyTest: spawnEnemy, get objective() { return objective; }, get waveEvent() { return waveEvent; }, eventFor,
   applyBurnTest(s, n, per) { s.lastHitT = -99; applyBurn(s, n, per, null); },
+  useKit, combatReason, openShop, get time() { return time; },
 };
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
